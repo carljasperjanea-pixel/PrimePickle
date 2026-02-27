@@ -94,31 +94,38 @@ export default function PlayerDashboard() {
 
   // Active Lobby (Open or Full or Playing)
   const activeLobby = lobbies.find(l => l.status === 'open' || l.status === 'full' || l.status === 'playing');
+  const activeLobbyId = activeLobby?.id;
+  const activeLobbyStatus = activeLobby?.status;
+  const activeLobbyPlayers = activeLobby?.players;
   
   // Polling for updates
   useEffect(() => {
-    if (activeLobby) {
+    if (activeLobbyId) {
       const interval = setInterval(fetchLobbies, 3000);
       return () => clearInterval(interval);
     }
-  }, [activeLobby?.id]);
+  }, [activeLobbyId]);
 
   // Redirect if playing
   useEffect(() => {
-    if (activeLobby?.status === 'playing') {
-      navigate(`/scorer/${activeLobby.id}`);
+    if (activeLobbyStatus === 'playing' && activeLobbyId) {
+      navigate(`/scorer/${activeLobbyId}`);
     }
-  }, [activeLobby?.status]);
+  }, [activeLobbyStatus, activeLobbyId]);
 
   // Countdown Logic
   const [countdown, setCountdown] = useState<number | null>(null);
+  
+  // Check if everyone is ready
+  const allReady = activeLobbyPlayers?.length >= 2 && activeLobbyPlayers.every((p: any) => p.is_ready);
+
   useEffect(() => {
-    if (activeLobby && activeLobby.players?.length >= 2 && activeLobby.players.every((p: any) => p.is_ready)) {
+    if (allReady) {
       if (countdown === null) setCountdown(3);
     } else {
       setCountdown(null);
     }
-  }, [activeLobby]);
+  }, [allReady]); // Only run when readiness changes
 
   useEffect(() => {
     if (countdown !== null && countdown > 0) {
