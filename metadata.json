@@ -1,0 +1,7 @@
+{
+  "name": "PrimePickle",
+  "description": "A high-performance, community-focused pickleball matchmaking platform with MMR system and QR-code based lobby joining.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
