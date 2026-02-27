@@ -9,7 +9,7 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState('player'); // 'player' or 'admin'
+  const [role, setRole] = useState('player'); // Default to player
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
@@ -20,7 +20,7 @@ export default function Register() {
         email, 
         password, 
         display_name: displayName,
-        role 
+        role: 'player' // Force player role
       });
       if (data.user.role === 'admin') {
         navigate('/admin');
@@ -66,34 +66,6 @@ export default function Register() {
                 onChange={(e) => setPassword(e.target.value)} 
                 required 
               />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Account Type</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="role" 
-                    value="player" 
-                    checked={role === 'player'} 
-                    onChange={() => setRole('player')}
-                    className="accent-primary"
-                  />
-                  <span>Player</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="role" 
-                    value="admin" 
-                    checked={role === 'admin'} 
-                    onChange={() => setRole('admin')}
-                    className="accent-primary"
-                  />
-                  <span>Admin (Organizer)</span>
-                </label>
-              </div>
             </div>
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
