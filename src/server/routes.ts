@@ -207,20 +207,32 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
         .from('lobbies')
         .select(`
           *,
-          lobby_players (count)
+          lobby_players (
+            joined_at,
+            profiles (
+              id,
+              display_name,
+              mmr,
+              avatar_url
+            )
+          )
         `)
         .eq('admin_id', req.user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Transform count format if needed
-      const lobbiesWithCount = lobbies.map((l: any) => ({
+      // Transform data structure for frontend
+      const lobbiesWithPlayers = lobbies.map((l: any) => ({
         ...l,
-        player_count: l.lobby_players[0]?.count || 0
+        players: l.lobby_players.map((lp: any) => ({
+          ...lp.profiles,
+          joined_at: lp.joined_at
+        })).sort((a: any, b: any) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime()),
+        player_count: l.lobby_players.length
       }));
 
-      res.json({ lobbies: lobbiesWithCount });
+      res.json({ lobbies: lobbiesWithPlayers });
     } else {
       // Get lobbies the player has joined
       const { data: lobbies, error } = await supabase
