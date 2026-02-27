@@ -238,9 +238,9 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
         .from('lobbies')
         .select(`
           *,
-          lobby_players (
+          lobby_players!lobby_players_lobby_id_fkey (
             joined_at,
-            profiles (
+            profiles!lobby_players_profile_id_fkey (
               id,
               display_name,
               mmr,
@@ -265,16 +265,11 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
 
       res.json({ lobbies: lobbiesWithPlayers });
     } else {
-      // Get lobbies the player has joined
+      // Get lobbies the player has joined using a join
       const { data: lobbies, error } = await supabase
         .from('lobbies')
-        .select('*')
-        .in('id', (
-          await supabase
-            .from('lobby_players')
-            .select('lobby_id')
-            .eq('profile_id', req.user.id)
-        ).data?.map((lp: any) => lp.lobby_id) || [])
+        .select('*, lobby_players!inner(profile_id)')
+        .eq('lobby_players.profile_id', req.user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
