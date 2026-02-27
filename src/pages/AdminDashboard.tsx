@@ -32,12 +32,18 @@ export default function AdminDashboard() {
     }
   };
 
+  const [isCreating, setIsCreating] = useState(false);
+
   const createLobby = async () => {
+    setIsCreating(true);
     try {
       await apiRequest('/lobbies', 'POST');
-      fetchLobbies();
-    } catch (e) {
+      await fetchLobbies();
+    } catch (e: any) {
       console.error(e);
+      alert('Failed to create lobby: ' + (e.message || 'Unknown error'));
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -123,9 +129,11 @@ export default function AdminDashboard() {
         <div>
           <Button 
             onClick={createLobby} 
+            disabled={isCreating}
             className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-full px-6 shadow-md transition-all hover:shadow-lg"
           >
-            <Plus className="w-5 h-5" /> Open New Court / Lobby
+            {isCreating ? <Activity className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+            {isCreating ? 'Creating...' : 'Open New Court / Lobby'}
           </Button>
         </div>
 

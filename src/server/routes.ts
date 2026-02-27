@@ -190,11 +190,17 @@ router.post('/lobbies', authenticateToken, async (req: any, res) => {
         { id, admin_id: req.user.id, qr_payload, status: 'open' }
       ]);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase Create Lobby Error:', JSON.stringify(error, null, 2));
+      throw error;
+    }
     res.json({ id, qr_payload, status: 'open' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create lobby error:', error);
-    res.status(500).json({ error: 'Failed to create lobby' });
+    res.status(500).json({ 
+      error: 'Failed to create lobby',
+      details: error.message || error.toString()
+    });
   }
 });
 
