@@ -211,14 +211,14 @@ export default function PlayerDashboard() {
               
               <div className="flex flex-col items-center mb-8">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-lime-500 to-amber-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg mb-4">
-                  {user.display_name.slice(0, 2).toUpperCase()}
+                  {user.display_name?.slice(0, 2).toUpperCase() || '??'}
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Full Name</label>
-                  <div className="font-medium text-gray-900">{user.display_name}</div>
+                  <div className="font-medium text-gray-900">{user.display_name || 'Unknown'}</div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</label>
@@ -314,7 +314,7 @@ export default function PlayerDashboard() {
                         <div key={p.id} className={`flex items-center justify-between p-2 bg-white rounded border shadow-sm ${p.is_ready ? 'border-green-400 ring-1 ring-green-400' : 'border-blue-100'}`}>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold relative">
-                              {p.display_name.slice(0, 2).toUpperCase()}
+                              {p.display_name?.slice(0, 2).toUpperCase() || '??'}
                               {activeLobby.team_a_captain_id === p.id && (
                                 <div className="absolute -top-1 -right-1 bg-yellow-400 rounded-full p-0.5 border border-white">
                                   <Trophy className="w-2 h-2 text-white" />
@@ -322,7 +322,7 @@ export default function PlayerDashboard() {
                               )}
                             </div>
                             <div className="text-sm font-medium">
-                              {p.display_name}
+                              {p.display_name || 'Unknown Player'}
                               {p.id === user.id && <span className="ml-1 text-xs text-gray-400">(You)</span>}
                             </div>
                           </div>
@@ -350,7 +350,7 @@ export default function PlayerDashboard() {
                         <div key={p.id} className={`flex items-center justify-between p-2 bg-white rounded border shadow-sm ${p.is_ready ? 'border-green-400 ring-1 ring-green-400' : 'border-orange-100'}`}>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold relative">
-                              {p.display_name.slice(0, 2).toUpperCase()}
+                              {p.display_name?.slice(0, 2).toUpperCase() || '??'}
                               {activeLobby.team_b_captain_id === p.id && (
                                 <div className="absolute -top-1 -right-1 bg-yellow-400 rounded-full p-0.5 border border-white">
                                   <Trophy className="w-2 h-2 text-white" />
@@ -358,7 +358,7 @@ export default function PlayerDashboard() {
                               )}
                             </div>
                             <div className="text-sm font-medium">
-                              {p.display_name}
+                              {p.display_name || 'Unknown Player'}
                               {p.id === user.id && <span className="ml-1 text-xs text-gray-400">(You)</span>}
                             </div>
                           </div>
