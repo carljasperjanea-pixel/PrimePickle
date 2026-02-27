@@ -4,6 +4,7 @@ import apiRoutes from '../src/server/routes.js';
 
 const app = express();
 
+app.set('trust proxy', 1); // Trust Vercel proxy
 app.use(express.json());
 app.use(cookieParser());
 

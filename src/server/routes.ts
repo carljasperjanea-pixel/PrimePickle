@@ -178,7 +178,13 @@ router.get('/user', authenticateToken, async (req: any, res) => {
 
 // Create Lobby (Admin only)
 router.post('/lobbies', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.sendStatus(403);
+  console.log('[DEBUG] POST /lobbies called');
+  console.log('[DEBUG] User:', req.user);
+  
+  if (req.user.role !== 'admin') {
+    console.log('[DEBUG] Permission denied: User is not admin');
+    return res.sendStatus(403);
+  }
   
   const id = uuidv4();
   const qr_payload = uuidv4(); // Unique string for QR code

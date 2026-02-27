@@ -37,11 +37,13 @@ export default function AdminDashboard() {
   const createLobby = async () => {
     setIsCreating(true);
     try {
-      await apiRequest('/lobbies', 'POST');
+      console.log('Sending create lobby request...');
+      const res = await apiRequest('/lobbies', 'POST');
+      console.log('Create lobby response:', res);
       await fetchLobbies();
     } catch (e: any) {
-      console.error(e);
-      alert('Failed to create lobby: ' + (e.message || 'Unknown error'));
+      console.error('Create lobby failed:', e);
+      alert(`Failed to create lobby.\nError: ${e.message}\nDetails: ${JSON.stringify(e)}`);
     } finally {
       setIsCreating(false);
     }
