@@ -268,12 +268,35 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
       // Get lobbies the player has joined using a join
       const { data: lobbies, error } = await supabase
         .from('lobbies')
-        .select('*, lobby_players!inner(profile_id)')
+        .select(`
+          *,
+          lobby_players!inner(profile_id),
+          all_players:lobby_players!lobby_players_lobby_id_fkey (
+            joined_at,
+            profiles!lobby_players_profile_id_fkey (
+              id,
+              display_name,
+              mmr,
+              avatar_url
+            )
+          )
+        `)
         .eq('lobby_players.profile_id', req.user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      res.json({ lobbies });
+
+      // Transform data structure for frontend
+      const lobbiesWithPlayers = lobbies.map((l: any) => ({
+        ...l,
+        players: l.all_players.map((lp: any) => ({
+          ...lp.profiles,
+          joined_at: lp.joined_at
+        })).sort((a: any, b: any) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime()),
+        player_count: l.all_players.length
+      }));
+
+      res.json({ lobbies: lobbiesWithPlayers });
     }
   } catch (error) {
     console.error('Fetch lobbies error:', error);

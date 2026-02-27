@@ -3,7 +3,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X } from 'lucide-react';
+import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Users, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function PlayerDashboard() {
@@ -92,6 +92,8 @@ export default function PlayerDashboard() {
   const losses = gamesPlayed - wins;
   const winRate = gamesPlayed > 0 ? ((wins / gamesPlayed) * 100).toFixed(1) : '0.0';
 
+  // Active Lobby (Open or Full)
+  const activeLobby = lobbies.find(l => l.status === 'open' || l.status === 'full');
   // Recent Matches (Completed Lobbies)
   const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
 
@@ -193,8 +195,87 @@ export default function PlayerDashboard() {
             />
           </div>
 
-          {/* Scan Action Card */}
-          <Card className="border-emerald-200 bg-emerald-50/30 shadow-md">
+          {/* Active Lobby or Scan Action */}
+          {activeLobby ? (
+            <Card className="border-emerald-200 bg-emerald-50/30 shadow-md">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">Current Lobby</h3>
+                      <p className="text-sm text-gray-600">ID: {activeLobby.id.slice(0, 8)}</p>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                    activeLobby.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                  }`}>
+                    {activeLobby.status}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="text-sm font-medium text-gray-500 uppercase tracking-wider">Players ({activeLobby.players?.length || 0}/4)</div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Team A */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-blue-600 uppercase">Team A</div>
+                      {activeLobby.players?.slice(0, 2).map((p: any) => (
+                        <div key={p.id} className="flex items-center gap-3 p-2 bg-white rounded border border-blue-100 shadow-sm">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                            {p.display_name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="text-sm font-medium">{p.display_name}</div>
+                        </div>
+                      ))}
+                      {(!activeLobby.players || activeLobby.players.length < 1) && (
+                         <div className="p-2 border border-dashed border-gray-300 rounded text-xs text-gray-400 text-center">Empty Slot</div>
+                      )}
+                      {(!activeLobby.players || activeLobby.players.length < 2) && (
+                         <div className="p-2 border border-dashed border-gray-300 rounded text-xs text-gray-400 text-center">Empty Slot</div>
+                      )}
+                    </div>
+
+                    {/* Team B */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-orange-600 uppercase">Team B</div>
+                      {activeLobby.players?.slice(2, 4).map((p: any) => (
+                        <div key={p.id} className="flex items-center gap-3 p-2 bg-white rounded border border-orange-100 shadow-sm">
+                          <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">
+                            {p.display_name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="text-sm font-medium">{p.display_name}</div>
+                        </div>
+                      ))}
+                      {(!activeLobby.players || activeLobby.players.length < 3) && (
+                         <div className="p-2 border border-dashed border-gray-300 rounded text-xs text-gray-400 text-center">Empty Slot</div>
+                      )}
+                      {(!activeLobby.players || activeLobby.players.length < 4) && (
+                         <div className="p-2 border border-dashed border-gray-300 rounded text-xs text-gray-400 text-center">Empty Slot</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 p-4 bg-white rounded-lg border text-center">
+                    {activeLobby.status === 'open' ? (
+                      <div className="flex items-center justify-center gap-2 text-gray-500 animate-pulse">
+                        <Clock className="w-4 h-4" />
+                        <span>Waiting for more players to join...</span>
+                      </div>
+                    ) : (
+                      <div className="text-emerald-600 font-bold">
+                        Lobby Full! Match ready to start.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-emerald-200 bg-emerald-50/30 shadow-md">
             <CardContent className="p-6">
               <div className="flex items-start gap-4 mb-6">
                 <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
@@ -259,6 +340,7 @@ export default function PlayerDashboard() {
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* Recent Matches */}
           <Card className="border-none shadow-md bg-white">
