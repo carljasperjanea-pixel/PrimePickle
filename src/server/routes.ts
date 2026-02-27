@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { supabase } from './supabase.js';
+import { supabase, supabaseKeyConfig } from './supabase.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
@@ -24,35 +24,89 @@ const authenticateToken = (req: any, res: any, next: any) => {
 router.post('/auth/signup', async (req, res) => {
   const { email, password, display_name, role } = req.body;
   
+  // Pre-check for Publishable Key
+  if (supabaseKeyConfig && supabaseKeyConfig.startsWith('sb_publishable')) {
+    console.error('CRITICAL ERROR: Attempting to sign up with a Publishable Key.');
+    return res.status(500).json({ 
+      error: 'Configuration Error: Server is using a Publishable Key.',
+      details: 'You must use the SERVICE ROLE KEY for the server to create users. Update SUPABASE_KEY in your secrets.'
+    });
+  }
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const id = uuidv4();
     
-    const { error } = await supabase
+    console.log(`Attempting to create user: ${email}`);
+    
+    // Debug: Check key role
+    try {
+      const keyPart = supabaseKeyConfig ? supabaseKeyConfig.split('.')[1] : '';
+      if (keyPart) {
+        const payload = JSON.parse(Buffer.from(keyPart, 'base64').toString());
+        console.log(`[DEBUG] Using Supabase Key Role: ${payload.role}`);
+      }
+    } catch (e) {
+      console.log('[DEBUG] Could not decode key role');
+    }
+
+    const { data, error } = await supabase
       .from('profiles')
       .insert([
         { id, email, password_hash: hashedPassword, display_name, role: role || 'player' }
-      ]);
+      ])
+      .select()
+      .single();
     
     if (error) {
+      // Force logging of all properties including non-enumerable ones
+      console.error('Supabase Insert Error (Full):', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        ...error
+      });
+
       if (error.code === '23505') { // Unique violation
         return res.status(400).json({ error: 'Email already exists' });
       }
+      if (error.code === '42P01') { // Undefined table
+        return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
+      }
+      if (error.code === '42501') { // RLS violation
+        return res.status(500).json({ error: 'Permission denied (RLS). Ensure you are using the SERVICE ROLE KEY.' });
+      }
+      
       throw error;
     }
     
+    console.log('User created successfully:', id);
+
     const token = jwt.sign({ id, email, role: role || 'player' }, JWT_SECRET);
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
     res.json({ user: { id, email, display_name, role: role || 'player' } });
   } catch (error: any) {
-    console.error('Signup error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Signup Exception:', error);
+    res.status(500).json({ 
+      error: error.message || 'Internal server error', 
+      details: error.toString()
+    });
   }
 });
 
 router.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
   
+  // Pre-check for Publishable Key
+  if (supabaseKeyConfig && supabaseKeyConfig.startsWith('sb_publishable')) {
+    console.error('CRITICAL ERROR: Attempting to login with a Publishable Key.');
+    return res.status(500).json({ 
+      error: 'Configuration Error: Server is using a Publishable Key.',
+      details: 'You must use the SERVICE ROLE KEY for the server to authenticate users. Update SUPABASE_KEY in your secrets.'
+    });
+  }
+
   try {
     const { data: user, error } = await supabase
       .from('profiles')
@@ -60,6 +114,18 @@ router.post('/auth/login', async (req, res) => {
       .eq('email', email)
       .single();
     
+    if (error) {
+      console.error('Login lookup error:', JSON.stringify(error, null, 2));
+      
+      if (error.code === '42P01') { // Undefined table
+        return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
+      }
+      if (error.code === '42501') { // RLS violation
+        return res.status(500).json({ error: 'Permission denied (RLS). Ensure you are using the SERVICE ROLE KEY.' });
+      }
+      // If user not found (PGRST116), we fall through to invalid credentials
+    }
+
     if (error || !user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -70,9 +136,12 @@ router.post('/auth/login', async (req, res) => {
     // Remove password hash from response
     const { password_hash, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  } catch (error: any) {
+    console.error('Login Exception:', error);
+    res.status(500).json({ 
+      error: error.message || 'Internal server error', 
+      details: error.toString() 
+    });
   }
 });
 
