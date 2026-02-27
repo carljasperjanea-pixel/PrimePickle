@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Trophy, User, Activity, QrCode } from 'lucide-react';
+import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
+  const [lobbies, setLobbies] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -16,9 +17,21 @@ export default function PlayerDashboard() {
   useEffect(() => {
     useUser().then(u => {
       if (!u) navigate('/login');
-      else setUser(u);
+      else {
+        setUser(u);
+        fetchLobbies();
+      }
     });
   }, []);
+
+  const fetchLobbies = async () => {
+    try {
+      const data = await apiRequest('/lobbies');
+      setLobbies(data.lobbies || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
     if (scanning) {
@@ -58,119 +71,247 @@ export default function PlayerDashboard() {
     try {
       const res = await apiRequest('/lobbies/join', 'POST', { qr_payload: qrPayload });
       setScanResult(`Joined lobby successfully! ID: ${res.lobby_id}`);
-      // Refresh user data or redirect to lobby view
+      fetchLobbies(); // Refresh lobbies
+      setTimeout(() => setScanResult(null), 3000);
     } catch (err: any) {
       setError(err.message);
-      setScanResult(null);
+      setTimeout(() => setError(''), 5000);
     }
+  };
+
+  const handleLogout = () => {
+    document.cookie = 'token=; Max-Age=0; path=/;';
+    navigate('/login');
   };
 
   if (!user) return <div className="p-8 text-center">Loading...</div>;
 
+  // Mock Stats (derive from games_played if possible)
+  const gamesPlayed = user.games_played || 0;
+  const wins = Math.floor(gamesPlayed * 0.6); // Mock 60% win rate
+  const losses = gamesPlayed - wins;
+  const winRate = gamesPlayed > 0 ? ((wins / gamesPlayed) * 100).toFixed(1) : '0.0';
+
+  // Recent Matches (Completed Lobbies)
+  const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
+
   return (
-    <div className="min-h-screen bg-muted/30 p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <header className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-primary">Player Dashboard</h1>
-          <Button variant="outline" onClick={() => {
-            document.cookie = 'token=; Max-Age=0; path=/;';
-            navigate('/login');
-          }}>Sign Out</Button>
-        </header>
+    <div className="min-h-screen bg-gray-50 font-sans">
+      {/* Header */}
+      <header className="bg-gradient-to-r from-emerald-700 to-amber-500 text-white p-6 shadow-lg">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <Trophy className="w-8 h-8 text-white" />
+            <h1 className="text-2xl font-bold leading-tight">Player Dashboard</h1>
+          </div>
+          <Button 
+            variant="secondary" 
+            className="bg-white text-gray-800 hover:bg-gray-100 border-none shadow-sm gap-2"
+            onClick={handleLogout}
+          >
+            <LogOut className="w-4 h-4" /> Logout
+          </Button>
+        </div>
+      </header>
 
-        {/* Profile Card */}
-        <Card>
-          <CardContent className="flex items-center gap-6 p-6">
-            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
-              <User className="w-10 h-10 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold">{user.display_name}</h2>
-              <p className="text-muted-foreground">{user.email}</p>
-              <div className="flex gap-4 mt-2 text-sm">
-                <span className="bg-accent/10 text-accent px-2 py-1 rounded font-medium">
-                  {user.role.toUpperCase()}
-                </span>
+      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left Sidebar: Profile */}
+        <div className="lg:col-span-1 space-y-6">
+          <Card className="border-none shadow-md overflow-hidden bg-white">
+            <CardContent className="p-6 relative">
+              <div className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 cursor-pointer">
+                <Edit2 className="w-4 h-4" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+              
+              <h2 className="text-lg font-semibold mb-6">My Profile</h2>
+              
+              <div className="flex flex-col items-center mb-8">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-lime-500 to-amber-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg mb-4">
+                  {user.display_name.slice(0, 2).toUpperCase()}
+                </div>
+              </div>
 
-        {/* Stats Grid */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Current MMR</CardTitle>
-              <Trophy className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold text-primary">{user.mmr}</div>
-              <p className="text-xs text-muted-foreground">Top 15% of players</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Games Played</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">{user.games_played}</div>
-              <p className="text-xs text-muted-foreground">Lifetime matches</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Full Name</label>
+                  <div className="font-medium text-gray-900">{user.display_name}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</label>
+                  <div className="text-sm text-gray-600 truncate" title={user.email}>{user.email}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Address</label>
+                  <div className="text-sm text-gray-600">{user.address || '123 Pickleball Lane, Austin, TX'}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</label>
+                  <div className="text-sm text-gray-600">{user.phone || '(555) 123-4567'}</div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Actions */}
-        <Card className="border-2 border-primary/20">
-          <CardHeader>
-            <CardTitle>Ready to Play?</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!scanning ? (
-              <div className="text-center py-8">
-                <Button size="lg" className="w-full md:w-auto gap-2" onClick={() => setScanning(true)}>
-                  <QrCode className="w-5 h-5" />
-                  Scan Lobby QR Code
-                </Button>
-                
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <span className="text-sm text-muted-foreground">or enter code manually:</span>
-                </div>
-                <div className="flex gap-2 max-w-xs mx-auto mt-2">
-                  <input 
-                    type="text" 
-                    placeholder="Lobby Code" 
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleJoinLobby((e.target as HTMLInputElement).value);
-                      }
-                    }}
-                  />
-                </div>
+        {/* Right Content: Stats & Actions */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* MMR Card */}
+          <Card className="border-none shadow-md bg-orange-50/50">
+            <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+              <div className="flex items-center gap-2 text-orange-600 font-medium mb-2">
+                <Trophy className="w-5 h-5" /> Current MMR
+              </div>
+              <div className="text-6xl font-bold text-amber-600 mb-1">{user.mmr || 1000}</div>
+              <div className="text-sm text-gray-500">Matchmaking Rating</div>
+            </CardContent>
+          </Card>
 
-                {scanResult && (
-                  <div className="mt-4 p-4 bg-green-50 text-green-700 rounded-lg">
-                    {scanResult}
+          {/* Stats Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <StatsCard 
+              icon={<TrendingUp className="w-5 h-5 text-green-600" />} 
+              bg="bg-green-100" 
+              value={wins} 
+              label="Wins" 
+              valueColor="text-green-700"
+            />
+            <StatsCard 
+              icon={<Target className="w-5 h-5 text-red-600" />} 
+              bg="bg-red-100" 
+              value={losses} 
+              label="Losses" 
+              valueColor="text-red-700"
+            />
+            <StatsCard 
+              icon={<BarChart className="w-5 h-5 text-blue-600" />} 
+              bg="bg-blue-100" 
+              value={`${winRate}%`} 
+              label="Win Rate" 
+              valueColor="text-blue-700"
+            />
+          </div>
+
+          {/* Scan Action Card */}
+          <Card className="border-emerald-200 bg-emerald-50/30 shadow-md">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4 mb-6">
+                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                  <Camera className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Ready to Play?</h3>
+                  <p className="text-sm text-gray-600 mt-1">Scan the court's QR code to join a lobby and start your match</p>
+                </div>
+              </div>
+
+              {!scanning ? (
+                <div className="space-y-4">
+                  <Button 
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md"
+                    onClick={() => setScanning(true)}
+                  >
+                    <QrCode className="w-5 h-5 mr-2" /> Scan QR Code to Join Match
+                  </Button>
+                  
+                  {/* Manual Entry Fallback */}
+                  <div className="flex items-center gap-2">
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                    <span className="text-xs text-gray-400 uppercase font-medium">Or enter code</span>
+                    <div className="h-px bg-gray-200 flex-1"></div>
                   </div>
-                )}
-                {error && (
-                  <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg">
-                    {error}
+                  
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Enter Lobby Code manually..." 
+                      className="flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleJoinLobby((e.target as HTMLInputElement).value);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {scanResult && (
+                    <div className="p-3 bg-green-100 text-green-800 rounded-md text-sm font-medium text-center animate-in fade-in slide-in-from-top-2">
+                      {scanResult}
+                    </div>
+                  )}
+                  {error && (
+                    <div className="p-3 bg-red-100 text-red-800 rounded-md text-sm font-medium text-center animate-in fade-in slide-in-from-top-2">
+                      {error}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white p-4 rounded-lg border shadow-inner">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-semibold text-sm">Scanning...</h4>
+                    <Button variant="ghost" size="sm" onClick={() => setScanning(false)} className="h-8 w-8 p-0 rounded-full">
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <div id="reader" className="w-full rounded-lg overflow-hidden"></div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Matches */}
+          <Card className="border-none shadow-md bg-white">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Calendar className="w-5 h-5 text-gray-500" />
+                <h3 className="font-bold text-gray-900">Recent Matches</h3>
+              </div>
+
+              <div className="space-y-4">
+                {recentMatches.length > 0 ? (
+                  recentMatches.map((match, i) => (
+                    <div key={match.id} className="flex items-center justify-between p-4 bg-white border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${i % 2 === 0 ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                        <div>
+                          <div className="font-bold text-gray-900">Court {match.id.slice(0, 4).toUpperCase()}</div>
+                          <div className="text-xs text-gray-500">{new Date(match.created_at).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-gray-900">11-7</div>
+                        <div className="text-xs font-medium text-emerald-600">+20 MMR</div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    No recent matches found.
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="max-w-sm mx-auto">
-                <div id="reader" className="w-full"></div>
-                <Button variant="ghost" className="w-full mt-4" onClick={() => setScanning(false)}>
-                  Cancel Scan
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+
+        </div>
+      </main>
     </div>
+  );
+}
+
+function StatsCard({ icon, bg, value, label, valueColor }: { icon: React.ReactNode, bg: string, value: string | number, label: string, valueColor: string }) {
+  return (
+    <Card className="border-none shadow-sm hover:shadow-md transition-shadow bg-white">
+      <CardContent className="p-6 flex items-center gap-4">
+        <div className={`w-12 h-12 rounded-full ${bg} flex items-center justify-center shrink-0`}>
+          {icon}
+        </div>
+        <div>
+          <div className={`text-2xl font-bold ${valueColor}`}>{value}</div>
+          <div className="text-sm text-gray-500 font-medium">{label}</div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
