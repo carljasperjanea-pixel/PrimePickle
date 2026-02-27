@@ -181,6 +181,25 @@ router.post('/lobbies', authenticateToken, async (req: any, res) => {
   console.log('[DEBUG] POST /lobbies called');
   console.log('[DEBUG] User:', req.user);
   
+  // Check Key Role
+  try {
+    const keyPart = supabaseKeyConfig ? supabaseKeyConfig.split('.')[1] : '';
+    if (keyPart) {
+      const payload = JSON.parse(Buffer.from(keyPart, 'base64').toString());
+      console.log(`[DEBUG] Supabase Key Role: ${payload.role}`);
+      
+      if (payload.role !== 'service_role') {
+        console.error('[CRITICAL] Server is NOT using Service Role Key. RLS will block inserts.');
+        return res.status(500).json({ 
+          error: 'Configuration Error', 
+          details: 'Server is using "anon" key instead of "service_role" key. Please update SUPABASE_KEY in Vercel Environment Variables.' 
+        });
+      }
+    }
+  } catch (e) {
+    console.log('[DEBUG] Could not decode key role');
+  }
+
   if (req.user.role !== 'admin') {
     console.log('[DEBUG] Permission denied: User is not admin');
     return res.sendStatus(403);
