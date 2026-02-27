@@ -348,4 +348,39 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Temporary route to seed an admin account
+router.get('/auth/seed-admin', async (req, res) => {
+  try {
+    const email = 'admin@primepickle.com';
+    const password = 'password123';
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const id = uuidv4();
+
+    // Check if exists
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (existing) {
+      return res.json({ message: 'Admin account already exists', email, password });
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .insert([
+        { id, email, password_hash: hashedPassword, display_name: 'System Admin', role: 'admin' }
+      ]);
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ message: 'Admin account created successfully', email, password });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
