@@ -272,6 +272,7 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
           *,
           lobby_players!inner(profile_id),
           all_players:lobby_players!lobby_players_lobby_id_fkey (
+            is_ready,
             joined_at,
             profiles!lobby_players_profile_id_fkey (
               id,
@@ -291,7 +292,8 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
         ...l,
         players: l.all_players.map((lp: any) => ({
           ...lp.profiles,
-          joined_at: lp.joined_at
+          joined_at: lp.joined_at,
+          is_ready: lp.is_ready
         })).sort((a: any, b: any) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime()),
         player_count: l.all_players.length
       }));
@@ -518,6 +520,90 @@ router.get('/auth/seed-admin', async (req, res) => {
     res.json({ message: 'Admin account created successfully', email, password });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Match Setup Routes ---
+
+// Claim Captain
+router.post('/lobbies/:id/captain', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const { team } = req.body; // 'A' or 'B'
+  
+  if (!['A', 'B'].includes(team)) return res.status(400).json({ error: 'Invalid team' });
+
+  const column = team === 'A' ? 'team_a_captain_id' : 'team_b_captain_id';
+
+  try {
+    // Check if captain already exists
+    const { data: lobby } = await supabase.from('lobbies').select(column).eq('id', id).single();
+    if (lobby && lobby[column]) {
+      return res.status(400).json({ error: 'Captain already selected' });
+    }
+
+    const { error } = await supabase
+      .from('lobbies')
+      .update({ [column]: req.user.id })
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to set captain' });
+  }
+});
+
+// Update Match Settings
+router.post('/lobbies/:id/settings', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const { match_goal } = req.body;
+
+  try {
+    const { error } = await supabase
+      .from('lobbies')
+      .update({ match_goal })
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// Toggle Ready
+router.post('/lobbies/:id/ready', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const { is_ready } = req.body;
+
+  try {
+    const { error } = await supabase
+      .from('lobby_players')
+      .update({ is_ready })
+      .eq('lobby_id', id)
+      .eq('profile_id', req.user.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update ready status' });
+  }
+});
+
+// Start Match
+router.post('/lobbies/:id/start', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+
+  try {
+    const { error } = await supabase
+      .from('lobbies')
+      .update({ status: 'playing' })
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to start match' });
   }
 });
 

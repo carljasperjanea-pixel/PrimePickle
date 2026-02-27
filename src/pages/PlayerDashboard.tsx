@@ -92,8 +92,90 @@ export default function PlayerDashboard() {
   const losses = gamesPlayed - wins;
   const winRate = gamesPlayed > 0 ? ((wins / gamesPlayed) * 100).toFixed(1) : '0.0';
 
-  // Active Lobby (Open or Full)
-  const activeLobby = lobbies.find(l => l.status === 'open' || l.status === 'full');
+  // Active Lobby (Open or Full or Playing)
+  const activeLobby = lobbies.find(l => l.status === 'open' || l.status === 'full' || l.status === 'playing');
+  
+  // Polling for updates
+  useEffect(() => {
+    if (activeLobby) {
+      const interval = setInterval(fetchLobbies, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [activeLobby?.id]);
+
+  // Redirect if playing
+  useEffect(() => {
+    if (activeLobby?.status === 'playing') {
+      navigate(`/scorer/${activeLobby.id}`);
+    }
+  }, [activeLobby?.status]);
+
+  // Countdown Logic
+  const [countdown, setCountdown] = useState<number | null>(null);
+  useEffect(() => {
+    if (activeLobby && activeLobby.players?.length >= 2 && activeLobby.players.every((p: any) => p.is_ready)) {
+      if (countdown === null) setCountdown(3);
+    } else {
+      setCountdown(null);
+    }
+  }, [activeLobby]);
+
+  useEffect(() => {
+    if (countdown !== null && countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      // Start Match
+      handleStartMatch();
+    }
+  }, [countdown]);
+
+  const handleStartMatch = async () => {
+    if (!activeLobby) return;
+    try {
+      await apiRequest(`/lobbies/${activeLobby.id}/start`, 'POST');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleClaimCaptain = async (team: 'A' | 'B') => {
+    if (!activeLobby) return;
+    try {
+      await apiRequest(`/lobbies/${activeLobby.id}/captain`, 'POST', { team });
+      fetchLobbies();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handleSetGoal = async (goal: number) => {
+    if (!activeLobby) return;
+    try {
+      await apiRequest(`/lobbies/${activeLobby.id}/settings`, 'POST', { match_goal: goal });
+      fetchLobbies();
+    } catch (e: any) {
+      console.error(e);
+    }
+  };
+
+  const handleToggleReady = async () => {
+    if (!activeLobby) return;
+    const me = activeLobby.players.find((p: any) => p.id === user.id);
+    try {
+      await apiRequest(`/lobbies/${activeLobby.id}/ready`, 'POST', { is_ready: !me?.is_ready });
+      fetchLobbies();
+    } catch (e: any) {
+      console.error(e);
+    }
+  };
+
+  // Helper to check if I am captain
+  const isMyTeamCaptain = (team: 'A' | 'B') => {
+    if (!activeLobby) return false;
+    const captainId = team === 'A' ? activeLobby.team_a_captain_id : activeLobby.team_b_captain_id;
+    return captainId === user.id;
+  };
   // Recent Matches (Completed Lobbies)
   const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
 
@@ -222,13 +304,30 @@ export default function PlayerDashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Team A */}
                     <div className="space-y-2">
-                      <div className="text-xs font-bold text-blue-600 uppercase">Team A</div>
+                      <div className="flex justify-between items-center">
+                        <div className="text-xs font-bold text-blue-600 uppercase">Team A</div>
+                        {!activeLobby.team_a_captain_id && activeLobby.players?.slice(0, 2).some((p: any) => p.id === user.id) && (
+                          <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => handleClaimCaptain('A')}>Become Captain</Button>
+                        )}
+                        {activeLobby.team_a_captain_id && <div className="text-[10px] text-blue-600 font-bold">Captain Selected</div>}
+                      </div>
                       {activeLobby.players?.slice(0, 2).map((p: any) => (
-                        <div key={p.id} className="flex items-center gap-3 p-2 bg-white rounded border border-blue-100 shadow-sm">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
-                            {p.display_name.slice(0, 2).toUpperCase()}
+                        <div key={p.id} className={`flex items-center justify-between p-2 bg-white rounded border shadow-sm ${p.is_ready ? 'border-green-400 ring-1 ring-green-400' : 'border-blue-100'}`}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold relative">
+                              {p.display_name.slice(0, 2).toUpperCase()}
+                              {activeLobby.team_a_captain_id === p.id && (
+                                <div className="absolute -top-1 -right-1 bg-yellow-400 rounded-full p-0.5 border border-white">
+                                  <Trophy className="w-2 h-2 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-sm font-medium">
+                              {p.display_name}
+                              {p.id === user.id && <span className="ml-1 text-xs text-gray-400">(You)</span>}
+                            </div>
                           </div>
-                          <div className="text-sm font-medium">{p.display_name}</div>
+                          {p.is_ready && <div className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">READY</div>}
                         </div>
                       ))}
                       {(!activeLobby.players || activeLobby.players.length < 1) && (
@@ -241,13 +340,30 @@ export default function PlayerDashboard() {
 
                     {/* Team B */}
                     <div className="space-y-2">
-                      <div className="text-xs font-bold text-orange-600 uppercase">Team B</div>
+                      <div className="flex justify-between items-center">
+                        <div className="text-xs font-bold text-orange-600 uppercase">Team B</div>
+                        {!activeLobby.team_b_captain_id && activeLobby.players?.slice(2, 4).some((p: any) => p.id === user.id) && (
+                          <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => handleClaimCaptain('B')}>Become Captain</Button>
+                        )}
+                        {activeLobby.team_b_captain_id && <div className="text-[10px] text-orange-600 font-bold">Captain Selected</div>}
+                      </div>
                       {activeLobby.players?.slice(2, 4).map((p: any) => (
-                        <div key={p.id} className="flex items-center gap-3 p-2 bg-white rounded border border-orange-100 shadow-sm">
-                          <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">
-                            {p.display_name.slice(0, 2).toUpperCase()}
+                        <div key={p.id} className={`flex items-center justify-between p-2 bg-white rounded border shadow-sm ${p.is_ready ? 'border-green-400 ring-1 ring-green-400' : 'border-orange-100'}`}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold relative">
+                              {p.display_name.slice(0, 2).toUpperCase()}
+                              {activeLobby.team_b_captain_id === p.id && (
+                                <div className="absolute -top-1 -right-1 bg-yellow-400 rounded-full p-0.5 border border-white">
+                                  <Trophy className="w-2 h-2 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-sm font-medium">
+                              {p.display_name}
+                              {p.id === user.id && <span className="ml-1 text-xs text-gray-400">(You)</span>}
+                            </div>
                           </div>
-                          <div className="text-sm font-medium">{p.display_name}</div>
+                          {p.is_ready && <div className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">READY</div>}
                         </div>
                       ))}
                       {(!activeLobby.players || activeLobby.players.length < 3) && (
@@ -259,15 +375,54 @@ export default function PlayerDashboard() {
                     </div>
                   </div>
 
+                  {/* Match Settings (Captain Only) */}
+                  {(isMyTeamCaptain('A') || isMyTeamCaptain('B')) && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                      <div className="text-xs font-bold text-gray-500 uppercase mb-2">Match Settings (Captain)</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Match Point:</span>
+                        {[11, 15, 21].map(points => (
+                          <button
+                            key={points}
+                            onClick={() => handleSetGoal(points)}
+                            className={`px-3 py-1 rounded text-sm font-bold transition-colors ${
+                              (activeLobby.match_goal || 11) === points 
+                                ? 'bg-emerald-600 text-white' 
+                                : 'bg-white border text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            {points}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Ready / Countdown Area */}
                   <div className="mt-6 p-4 bg-white rounded-lg border text-center">
-                    {activeLobby.status === 'open' ? (
-                      <div className="flex items-center justify-center gap-2 text-gray-500 animate-pulse">
-                        <Clock className="w-4 h-4" />
-                        <span>Waiting for more players to join...</span>
+                    {countdown !== null ? (
+                      <div className="flex flex-col items-center justify-center animate-pulse">
+                        <div className="text-4xl font-black text-emerald-600 mb-2">{countdown}</div>
+                        <div className="text-sm text-gray-500 font-medium">Starting Match...</div>
                       </div>
                     ) : (
-                      <div className="text-emerald-600 font-bold">
-                        Lobby Full! Match ready to start.
+                      <div className="space-y-3">
+                        <div className="flex justify-center">
+                          <Button 
+                            size="lg"
+                            onClick={handleToggleReady}
+                            className={`w-full sm:w-auto px-8 font-bold transition-all ${
+                              activeLobby.players?.find((p: any) => p.id === user.id)?.is_ready
+                                ? 'bg-red-500 hover:bg-red-600 text-white'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            }`}
+                          >
+                            {activeLobby.players?.find((p: any) => p.id === user.id)?.is_ready ? 'Cancel Ready' : 'LOCK IN READY'}
+                          </Button>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Waiting for all players to lock in...
+                        </div>
                       </div>
                     )}
                   </div>
