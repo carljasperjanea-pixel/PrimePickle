@@ -115,15 +115,23 @@ router.post('/auth/login', async (req, res) => {
       .single();
     
     if (error) {
-      console.error('Login lookup error:', JSON.stringify(error, null, 2));
-      
-      if (error.code === '42P01') { // Undefined table
-        return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
+      // Ignore "Row not found" error, it just means invalid credentials
+      if (error.code !== 'PGRST116') {
+        console.error('Login lookup error (Full):', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          ...error
+        });
+        
+        if (error.code === '42P01') { // Undefined table
+          return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
+        }
+        if (error.code === '42501') { // RLS violation
+          return res.status(500).json({ error: 'Permission denied (RLS). Ensure you are using the SERVICE ROLE KEY.' });
+        }
       }
-      if (error.code === '42501') { // RLS violation
-        return res.status(500).json({ error: 'Permission denied (RLS). Ensure you are using the SERVICE ROLE KEY.' });
-      }
-      // If user not found (PGRST116), we fall through to invalid credentials
     }
 
     if (error || !user || !(await bcrypt.compare(password, user.password_hash))) {
