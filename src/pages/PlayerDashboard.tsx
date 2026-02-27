@@ -24,15 +24,6 @@ export default function PlayerDashboard() {
     });
   }, []);
 
-  const fetchLobbies = async () => {
-    try {
-      const data = await apiRequest('/lobbies');
-      setLobbies(data.lobbies || []);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   useEffect(() => {
     if (scanning) {
       const scanner = new Html5QrcodeScanner(
@@ -100,18 +91,19 @@ export default function PlayerDashboard() {
   
   // Polling for updates
   useEffect(() => {
-    if (activeLobbyId) {
-      const interval = setInterval(fetchLobbies, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [activeLobbyId]);
+    fetchLobbies(); // Initial fetch
+    
+    // Only poll if we are in a lobby or just waiting
+    const interval = setInterval(fetchLobbies, 3000);
+    return () => clearInterval(interval);
+  }, []); // Run once on mount, keep polling
 
   // Redirect if playing
   useEffect(() => {
     if (activeLobbyStatus === 'playing' && activeLobbyId) {
       navigate(`/scorer/${activeLobbyId}`);
     }
-  }, [activeLobbyStatus, activeLobbyId]);
+  }, [activeLobbyStatus, activeLobbyId, navigate]);
 
   // Countdown Logic
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -125,7 +117,7 @@ export default function PlayerDashboard() {
     } else {
       setCountdown(null);
     }
-  }, [allReady]); // Only run when readiness changes
+  }, [allReady]);
 
   useEffect(() => {
     if (countdown !== null && countdown > 0) {
