@@ -109,28 +109,15 @@ export default function PlayerDashboard() {
     }
   };
 
-  const handleSwitchSlot = async (targetSlot: number) => {
+  const handleSwitchTeam = async (team: string) => {
     try {
-      await apiRequest('/lobbies/switch-slot', 'POST', { target_slot: targetSlot });
-      fetchActiveLobby(); // Refresh to see changes
+      await apiRequest('/lobbies/team', 'POST', { lobby_id: activeLobby.id, team });
+      fetchActiveLobby();
     } catch (err: any) {
       setError(err.message);
-      setTimeout(() => setError(''), 5000);
+      setTimeout(() => setError(''), 3000);
     }
   };
-
-  // Poll for lobby updates
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (activeLobby) {
-      fetchActiveLobby(); // Initial fetch
-      interval = setInterval(() => {
-        fetchActiveLobby();
-        fetchLobbies(); // Keep lobby status in sync
-      }, 3000); // Poll every 3s
-    }
-    return () => clearInterval(interval);
-  }, [activeLobby?.id]); // Depend on lobby ID to start/stop polling
 
   const handleLogout = () => {
     document.cookie = 'token=; Max-Age=0; path=/;';
@@ -265,88 +252,83 @@ export default function PlayerDashboard() {
                         Lobby ID: {activeLobby.id.slice(0, 8)}
                       </div>
                       
-                      {/* Active Players List */}
-                      <div className="mt-4 mb-2">
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Lobby Slots</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          {/* Team A Slots (0, 1) */}
-                          <div className="space-y-2">
-                            <h5 className="text-xs font-bold text-blue-700 uppercase">Team A</h5>
-                            {[0, 1].map(slotIndex => {
-                              const player = activeLobbyPlayers.find(p => p.slot_index === slotIndex);
-                              const isMe = player?.id === user.id;
-                              return (
-                                <div 
-                                  key={slotIndex}
-                                  onClick={() => !player && handleSwitchSlot(slotIndex)}
-                                  className={`
-                                    flex items-center gap-2 border rounded-lg p-2 shadow-sm transition-all
-                                    ${player ? 'bg-white border-blue-100' : 'bg-gray-50 border-dashed border-gray-300 cursor-pointer hover:bg-blue-50 hover:border-blue-300'}
-                                    ${isMe ? 'ring-2 ring-blue-400' : ''}
-                                  `}
-                                >
-                                  {player ? (
-                                    <>
-                                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
-                                        {player.avatar_url ? (
-                                          <img src={player.avatar_url} alt={player.display_name} className="w-full h-full object-cover" />
-                                        ) : (
-                                          player.display_name?.slice(0, 2).toUpperCase() || '??'
-                                        )}
-                                      </div>
-                                      <div className="overflow-hidden">
-                                        <div className="text-sm font-medium text-gray-900 truncate">{player.display_name}</div>
-                                        <div className="text-xs text-gray-500">MMR: {player.mmr}</div>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <div className="flex items-center justify-center w-full h-8 text-xs text-gray-400 font-medium">
-                                      Empty Slot
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                      {/* Teams Display */}
+                      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Team A */}
+                        <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100">
+                          <div className="flex justify-between items-center mb-3">
+                            <h4 className="font-bold text-blue-800 text-sm uppercase tracking-wider">Team A</h4>
+                            <span className="text-xs font-mono bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">
+                              {activeLobbyPlayers.filter(p => p.team === 'A').length}/2
+                            </span>
                           </div>
-
-                          {/* Team B Slots (2, 3) */}
+                          
                           <div className="space-y-2">
-                            <h5 className="text-xs font-bold text-orange-700 uppercase">Team B</h5>
-                            {[2, 3].map(slotIndex => {
-                              const player = activeLobbyPlayers.find(p => p.slot_index === slotIndex);
-                              const isMe = player?.id === user.id;
-                              return (
-                                <div 
-                                  key={slotIndex}
-                                  onClick={() => !player && handleSwitchSlot(slotIndex)}
-                                  className={`
-                                    flex items-center gap-2 border rounded-lg p-2 shadow-sm transition-all
-                                    ${player ? 'bg-white border-orange-100' : 'bg-gray-50 border-dashed border-gray-300 cursor-pointer hover:bg-orange-50 hover:border-orange-300'}
-                                    ${isMe ? 'ring-2 ring-orange-400' : ''}
-                                  `}
-                                >
-                                  {player ? (
-                                    <>
-                                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
-                                        {player.avatar_url ? (
-                                          <img src={player.avatar_url} alt={player.display_name} className="w-full h-full object-cover" />
-                                        ) : (
-                                          player.display_name?.slice(0, 2).toUpperCase() || '??'
-                                        )}
-                                      </div>
-                                      <div className="overflow-hidden">
-                                        <div className="text-sm font-medium text-gray-900 truncate">{player.display_name}</div>
-                                        <div className="text-xs text-gray-500">MMR: {player.mmr}</div>
-                                      </div>
-                                    </>
+                            {activeLobbyPlayers.filter(p => p.team === 'A').map((p: any) => (
+                              <div key={p.id} className="flex items-center gap-2 bg-white border border-blue-100 rounded-md p-2 shadow-sm">
+                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                                  {p.avatar_url ? (
+                                    <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
                                   ) : (
-                                    <div className="flex items-center justify-center w-full h-8 text-xs text-gray-400 font-medium">
-                                      Empty Slot
-                                    </div>
+                                    p.display_name?.slice(0, 2).toUpperCase() || '??'
                                   )}
                                 </div>
-                              );
-                            })}
+                                <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
+                                {p.id === user.id && <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">YOU</span>}
+                              </div>
+                            ))}
+                            
+                            {/* Join Team A Button */}
+                            {activeLobbyPlayers.find(p => p.id === user.id)?.team !== 'A' && 
+                             activeLobbyPlayers.filter(p => p.team === 'A').length < 2 && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700 h-8 text-xs"
+                                onClick={() => handleSwitchTeam('A')}
+                              >
+                                Join Team A
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Team B */}
+                        <div className="bg-orange-50/50 rounded-lg p-3 border border-orange-100">
+                          <div className="flex justify-between items-center mb-3">
+                            <h4 className="font-bold text-orange-800 text-sm uppercase tracking-wider">Team B</h4>
+                            <span className="text-xs font-mono bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full">
+                              {activeLobbyPlayers.filter(p => p.team === 'B').length}/2
+                            </span>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            {activeLobbyPlayers.filter(p => p.team === 'B').map((p: any) => (
+                              <div key={p.id} className="flex items-center gap-2 bg-white border border-orange-100 rounded-md p-2 shadow-sm">
+                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                                  {p.avatar_url ? (
+                                    <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    p.display_name?.slice(0, 2).toUpperCase() || '??'
+                                  )}
+                                </div>
+                                <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
+                                {p.id === user.id && <span className="ml-auto text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">YOU</span>}
+                              </div>
+                            ))}
+
+                            {/* Join Team B Button */}
+                            {activeLobbyPlayers.find(p => p.id === user.id)?.team !== 'B' && 
+                             activeLobbyPlayers.filter(p => p.team === 'B').length < 2 && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full border-dashed border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700 h-8 text-xs"
+                                onClick={() => handleSwitchTeam('B')}
+                              >
+                                Join Team B
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>
