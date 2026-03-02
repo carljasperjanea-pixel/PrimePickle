@@ -301,13 +301,25 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
     }
 
     // 2. Fetch all players in this lobby with join time for team assignment
-    const { data: lobbyPlayers, error: lpError } = await supabase
+    let { data: lobbyPlayers, error: lpError } = await supabase
       .from('lobby_players')
       .select('joined_at, team, profiles(id, display_name, avatar_url, mmr)')
       .eq('lobby_id', lobbyData.id)
       .order('joined_at', { ascending: true });
 
-    if (lpError) throw lpError;
+    // Fallback if 'team' column doesn't exist yet
+    if (lpError && lpError.code === '42703') {
+      const { data: retryData, error: retryError } = await supabase
+        .from('lobby_players')
+        .select('joined_at, profiles(id, display_name, avatar_url, mmr)')
+        .eq('lobby_id', lobbyData.id)
+        .order('joined_at', { ascending: true });
+      
+      if (retryError) throw retryError;
+      lobbyPlayers = retryData;
+    } else if (lpError) {
+      throw lpError;
+    }
 
     // Assign teams based on stored value or fallback to join order
     const playersWithTeams = lobbyPlayers.map((lp: any, index: number) => ({
@@ -340,8 +352,11 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
       .eq('profile_id', req.user.id)
       .single();
 
-    if (memError || !membership) {
-      return res.status(400).json({ error: 'You are not in this lobby' });
+    if (memError) {
+       if (memError.code === '42703') {
+         return res.status(500).json({ error: 'Team switching is not available (schema update required)' });
+       }
+       return res.status(400).json({ error: 'You are not in this lobby' });
     }
 
     if (membership.team === team) {
@@ -355,7 +370,7 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
       .eq('lobby_id', lobby_id)
       .eq('team', team);
 
-    if (countError) throw countError;
+    if (countError && countError.code !== '42703') throw countError;
 
     if ((count || 0) >= 2) {
       return res.status(400).json({ error: `Team ${team} is full` });
@@ -427,20 +442,33 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
     }
 
     // Determine Team Assignment
-    const { count: countA } = await supabase
+    let team = 'A';
+    const { count: countA, error: countAError } = await supabase
       .from('lobby_players')
       .select('*', { count: 'exact', head: true })
       .eq('lobby_id', lobby.id)
       .eq('team', 'A');
     
-    const team = (countA || 0) < 2 ? 'A' : 'B';
+    if (!countAError) {
+      team = (countA || 0) < 2 ? 'A' : 'B';
+    }
     
     // Join
     const { error: joinError } = await supabase
       .from('lobby_players')
       .insert([{ lobby_id: lobby.id, profile_id: req.user.id, team }]);
 
-    if (joinError) throw joinError;
+    if (joinError) {
+      // Fallback if 'team' column doesn't exist
+      if (joinError.code === '42703') {
+        const { error: retryError } = await supabase
+          .from('lobby_players')
+          .insert([{ lobby_id: lobby.id, profile_id: req.user.id }]);
+        if (retryError) throw retryError;
+      } else {
+        throw joinError;
+      }
+    }
     
     // If full (4 players), update status
     if ((count || 0) + 1 === 4) {
