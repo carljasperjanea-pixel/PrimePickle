@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
   const [lobbies, setLobbies] = useState<any[]>([]);
+  const [activeLobbyPlayers, setActiveLobbyPlayers] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -20,6 +21,7 @@ export default function PlayerDashboard() {
       else {
         setUser(u);
         fetchLobbies();
+        fetchActiveLobby();
       }
     });
   }, []);
@@ -30,6 +32,17 @@ export default function PlayerDashboard() {
       setLobbies(data.lobbies || []);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const fetchActiveLobby = async () => {
+    try {
+      const data = await apiRequest('/lobbies/active');
+      if (data.players) {
+        setActiveLobbyPlayers(data.players);
+      }
+    } catch (e) {
+      console.error("Failed to fetch active lobby players", e);
     }
   };
 
@@ -72,6 +85,20 @@ export default function PlayerDashboard() {
       const res = await apiRequest('/lobbies/join', 'POST', { qr_payload: qrPayload });
       setScanResult(`Joined lobby successfully! ID: ${res.lobby_id}`);
       fetchLobbies(); // Refresh lobbies
+      fetchActiveLobby(); // Refresh active lobby players
+      setTimeout(() => setScanResult(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
+    }
+  };
+
+  const handleLeaveLobby = async (lobbyId: string) => {
+    try {
+      await apiRequest('/lobbies/leave', 'POST', { lobby_id: lobbyId });
+      setScanResult('Left lobby successfully');
+      fetchLobbies(); // Refresh lobbies
+      setActiveLobbyPlayers([]); // Clear active lobby players
       setTimeout(() => setScanResult(null), 3000);
     } catch (err: any) {
       setError(err.message);
@@ -97,18 +124,6 @@ export default function PlayerDashboard() {
   
   // Active Lobby (Open or Full)
   const activeLobby = lobbies.find(l => l.status === 'open' || l.status === 'full');
-
-  const handleLeaveLobby = async (lobbyId: string) => {
-    try {
-      await apiRequest('/lobbies/leave', 'POST', { lobby_id: lobbyId });
-      setScanResult('Left lobby successfully');
-      fetchLobbies(); // Refresh lobbies
-      setTimeout(() => setScanResult(null), 3000);
-    } catch (err: any) {
-      setError(err.message);
-      setTimeout(() => setError(''), 5000);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -222,6 +237,25 @@ export default function PlayerDashboard() {
                       <p className="text-sm text-gray-600 mt-1">You are currently in a lobby waiting for the match to start.</p>
                       <div className="mt-2 text-xs font-mono bg-gray-100 px-2 py-1 rounded inline-block">
                         Lobby ID: {activeLobby.id.slice(0, 8)}
+                      </div>
+                      
+                      {/* Active Players List */}
+                      <div className="mt-4 mb-2">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Players ({activeLobbyPlayers.length}/4)</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {activeLobbyPlayers.map((p: any) => (
+                            <div key={p.id} className="flex items-center gap-2 bg-white border rounded-full px-3 py-1 shadow-sm">
+                              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden">
+                                {p.avatar_url ? (
+                                  <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
+                                ) : (
+                                  p.display_name.slice(0, 2).toUpperCase()
+                                )}
+                              </div>
+                              <span className="text-sm font-medium text-gray-700">{p.display_name}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -281,6 +281,45 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Get Active Lobby and its Players (Visibility System)
+router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
+  try {
+    // 1. Find the active lobby for this user
+    // This enforces the restriction: we only look for lobbies that are NOT completed.
+    const { data: activeLobbies, error: lobbyError } = await supabase
+      .from('lobbies')
+      .select('*, lobby_players!inner(profile_id)')
+      .eq('lobby_players.profile_id', req.user.id)
+      .neq('status', 'completed');
+
+    if (lobbyError) throw lobbyError;
+
+    const lobbyData = activeLobbies?.[0];
+
+    if (!lobbyData) {
+      return res.json({ lobby: null, players: [] });
+    }
+
+    // 2. Fetch all players in this lobby (Visibility: see all other players)
+    const { data: players, error: playersError } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url, mmr')
+      .in('id', (
+        await supabase
+          .from('lobby_players')
+          .select('profile_id')
+          .eq('lobby_id', lobbyData.id)
+      ).data?.map((lp: any) => lp.profile_id) || []);
+
+    if (playersError) throw playersError;
+
+    res.json({ lobby: lobbyData, players });
+  } catch (error) {
+    console.error('Fetch active lobby error:', error);
+    res.status(500).json({ error: 'Failed to fetch active lobby' });
+  }
+});
+
 // Join Lobby via QR Scan
 router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
   const { qr_payload } = req.body;
