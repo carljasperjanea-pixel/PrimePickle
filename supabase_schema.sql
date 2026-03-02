@@ -30,7 +30,6 @@ create table if not exists lobby_players (
   lobby_id uuid references lobbies(id) on delete cascade not null,
   profile_id uuid references profiles(id) on delete cascade not null,
   joined_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  team text, -- 'A' or 'B'
   primary key (lobby_id, profile_id)
 );
 

@@ -109,16 +109,6 @@ export default function PlayerDashboard() {
     }
   };
 
-  const handleSwitchTeam = async (team: string) => {
-    try {
-      await apiRequest('/lobbies/team', 'POST', { lobby_id: activeLobby.id, team });
-      fetchActiveLobby();
-    } catch (err: any) {
-      setError(err.message);
-      setTimeout(() => setError(''), 3000);
-    }
-  };
-
   const handleLogout = () => {
     document.cookie = 'token=; Max-Age=0; path=/;';
     navigate('/login');
@@ -252,84 +242,30 @@ export default function PlayerDashboard() {
                         Lobby ID: {activeLobby.id.slice(0, 8)}
                       </div>
                       
-                      {/* Teams Display */}
-                      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Team A */}
-                        <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100">
-                          <div className="flex justify-between items-center mb-3">
-                            <h4 className="font-bold text-blue-800 text-sm uppercase tracking-wider">Team A</h4>
-                            <span className="text-xs font-mono bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">
-                              {activeLobbyPlayers.filter(p => p.team === 'A').length}/2
-                            </span>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            {activeLobbyPlayers.filter(p => p.team === 'A').map((p: any) => (
-                              <div key={p.id} className="flex items-center gap-2 bg-white border border-blue-100 rounded-md p-2 shadow-sm">
-                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                      {/* Active Players List */}
+                      <div className="mt-4 mb-2">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Players ({activeLobbyPlayers.length}/4)</h4>
+                        <div className="flex flex-col gap-2">
+                          {activeLobbyPlayers.map((p: any) => (
+                            <div key={p.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2 shadow-sm">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
                                   {p.avatar_url ? (
                                     <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
                                   ) : (
                                     p.display_name?.slice(0, 2).toUpperCase() || '??'
                                   )}
                                 </div>
-                                <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
-                                {p.id === user.id && <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">YOU</span>}
-                              </div>
-                            ))}
-                            
-                            {/* Join Team A Button */}
-                            {activeLobbyPlayers.find(p => p.id === user.id)?.team !== 'A' && 
-                             activeLobbyPlayers.filter(p => p.team === 'A').length < 2 && (
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700 h-8 text-xs"
-                                onClick={() => handleSwitchTeam('A')}
-                              >
-                                Join Team A
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Team B */}
-                        <div className="bg-orange-50/50 rounded-lg p-3 border border-orange-100">
-                          <div className="flex justify-between items-center mb-3">
-                            <h4 className="font-bold text-orange-800 text-sm uppercase tracking-wider">Team B</h4>
-                            <span className="text-xs font-mono bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full">
-                              {activeLobbyPlayers.filter(p => p.team === 'B').length}/2
-                            </span>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            {activeLobbyPlayers.filter(p => p.team === 'B').map((p: any) => (
-                              <div key={p.id} className="flex items-center gap-2 bg-white border border-orange-100 rounded-md p-2 shadow-sm">
-                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
-                                  {p.avatar_url ? (
-                                    <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
-                                  ) : (
-                                    p.display_name?.slice(0, 2).toUpperCase() || '??'
-                                  )}
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{p.display_name}</div>
+                                  <div className="text-xs text-gray-500">MMR: {p.mmr}</div>
                                 </div>
-                                <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
-                                {p.id === user.id && <span className="ml-auto text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">YOU</span>}
                               </div>
-                            ))}
-
-                            {/* Join Team B Button */}
-                            {activeLobbyPlayers.find(p => p.id === user.id)?.team !== 'B' && 
-                             activeLobbyPlayers.filter(p => p.team === 'B').length < 2 && (
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="w-full border-dashed border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700 h-8 text-xs"
-                                onClick={() => handleSwitchTeam('B')}
-                              >
-                                Join Team B
-                              </Button>
-                            )}
-                          </div>
+                              <div className={`px-2 py-1 rounded text-xs font-bold ${p.team === 'A' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                Team {p.team}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
