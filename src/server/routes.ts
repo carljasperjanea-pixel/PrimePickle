@@ -350,6 +350,36 @@ router.post('/lobbies/ready', authenticateToken, async (req: any, res) => {
 
     if (updateError) throw updateError;
 
+    // Check if all players are ready and lobby is full
+    if (is_ready) {
+      const { count: totalPlayers, error: totalError } = await supabase
+        .from('lobby_players')
+        .select('*', { count: 'exact', head: true })
+        .eq('lobby_id', lobby_id);
+      
+      if (totalError) throw totalError;
+
+      const { count: readyPlayers, error: readyError } = await supabase
+        .from('lobby_players')
+        .select('*', { count: 'exact', head: true })
+        .eq('lobby_id', lobby_id)
+        .eq('is_ready', true);
+
+      if (readyError) throw readyError;
+
+      if ((totalPlayers || 0) === 4 && (readyPlayers || 0) === 4) {
+        // Start Game
+        const { error: startError } = await supabase
+          .from('lobbies')
+          .update({ status: 'in_progress', started_at: new Date().toISOString() })
+          .eq('id', lobby_id);
+        
+        if (startError) throw startError;
+        
+        return res.json({ message: 'Game starting!', game_started: true });
+      }
+    }
+
     res.json({ message: `Ready status updated to ${is_ready}` });
   } catch (error: any) {
     console.error('Toggle ready error:', error);

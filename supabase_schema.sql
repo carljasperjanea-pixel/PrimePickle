@@ -21,8 +21,9 @@ create table if not exists lobbies (
   id uuid primary key default uuid_generate_v4(),
   admin_id uuid references profiles(id) not null,
   qr_payload text unique not null,
-  status text default 'open', -- open, full, completed
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  status text default 'open', -- open, full, in_progress, completed
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  started_at timestamp with time zone
 );
 
 -- Create lobby_players table (junction table)
