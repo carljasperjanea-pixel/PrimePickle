@@ -83,51 +83,39 @@ export default function PlayerDashboard() {
 
   useEffect(() => {
     let mounted = true;
+    let qrScanner: any = null;
 
     if (scanning) {
-      import('html5-qrcode').then(({ Html5QrcodeScanner }) => {
+      import('qr-scanner').then(({ default: QrScanner }) => {
         if (!mounted) return;
 
-        // Clear previous instance if any
-        if (scannerRef.current) {
-          try {
-            scannerRef.current.clear();
-          } catch (e) {
-            // ignore
-          }
-        }
-
-        const scanner = new Html5QrcodeScanner(
-          "reader",
-          { 
-            fps: 10, 
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
-            showTorchButtonIfSupported: true
-          },
-          /* verbose= */ false
-        );
-        
-        scannerRef.current = scanner;
-        
-        scanner.render(
-          (decodedText) => {
-            if (mounted) {
-              try {
-                scanner.clear();
-              } catch (e) {
-                // ignore
+        const videoElem = document.getElementById('qr-video') as HTMLVideoElement;
+        if (videoElem) {
+          qrScanner = new QrScanner(
+            videoElem,
+            (result) => {
+              if (mounted) {
+                qrScanner.stop();
+                setScanning(false);
+                handleJoinLobby(result.data);
               }
-              setScanning(false);
-              handleJoinLobby(decodedText);
+            },
+            { 
+              highlightScanRegion: true,
+              highlightCodeOutline: true,
             }
-          },
-          (errorMessage) => {
-            // parse error, ignore to avoid spamming logs
-          }
-        );
+          );
+          
+          qrScanner.start().catch((err: any) => {
+            console.error(err);
+            setError("Failed to start camera. Please ensure you have given permission.");
+            setScanning(false);
+          });
+          
+          scannerRef.current = qrScanner;
+        }
       }).catch(err => {
-        console.error("Failed to load html5-qrcode", err);
+        console.error("Failed to load qr-scanner", err);
         setError("Failed to load QR scanner. Please try again.");
       });
     }
@@ -135,11 +123,8 @@ export default function PlayerDashboard() {
     return () => {
       mounted = false;
       if (scannerRef.current) {
-        try {
-          scannerRef.current.clear();
-        } catch (e) {
-          // ignore cleanup errors
-        }
+        scannerRef.current.stop();
+        scannerRef.current.destroy();
         scannerRef.current = null;
       }
     };
@@ -509,14 +494,14 @@ export default function PlayerDashboard() {
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-white p-4 rounded-lg border shadow-inner">
-                      <div className="flex justify-between items-center mb-4">
-                        <h4 className="font-semibold text-sm">Scanning...</h4>
-                        <Button variant="ghost" size="sm" onClick={() => setScanning(false)} className="h-8 w-8 p-0 rounded-full">
+                    <div className="bg-black p-0 rounded-lg border shadow-inner overflow-hidden relative aspect-square">
+                      <div className="absolute top-2 right-2 z-10">
+                        <Button variant="secondary" size="sm" onClick={() => setScanning(false)} className="h-8 w-8 p-0 rounded-full bg-white/80 hover:bg-white text-black">
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
-                      <div id="reader" className="w-full rounded-lg overflow-hidden"></div>
+                      <video id="qr-video" className="w-full h-full object-cover"></video>
+                      <div className="absolute inset-0 pointer-events-none border-2 border-emerald-500/50 rounded-lg"></div>
                     </div>
                   )}
                 </>
