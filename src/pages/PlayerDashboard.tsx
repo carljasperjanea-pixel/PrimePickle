@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
 import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -14,7 +15,6 @@ export default function PlayerDashboard() {
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
   const navigate = useNavigate();
-  const scannerRef = useRef<any>(null);
 
   useEffect(() => {
     useUser().then(u => {
@@ -80,55 +80,6 @@ export default function PlayerDashboard() {
       setActiveLobbyPlayers([]);
     }
   };
-
-  useEffect(() => {
-    let mounted = true;
-    let qrScanner: any = null;
-
-    if (scanning) {
-      import('qr-scanner').then(({ default: QrScanner }) => {
-        if (!mounted) return;
-
-        const videoElem = document.getElementById('qr-video') as HTMLVideoElement;
-        if (videoElem) {
-          qrScanner = new QrScanner(
-            videoElem,
-            (result) => {
-              if (mounted) {
-                qrScanner.stop();
-                setScanning(false);
-                handleJoinLobby(result.data);
-              }
-            },
-            { 
-              highlightScanRegion: true,
-              highlightCodeOutline: true,
-            }
-          );
-          
-          qrScanner.start().catch((err: any) => {
-            console.error(err);
-            setError("Failed to start camera. Please ensure you have given permission.");
-            setScanning(false);
-          });
-          
-          scannerRef.current = qrScanner;
-        }
-      }).catch(err => {
-        console.error("Failed to load qr-scanner", err);
-        setError("Failed to load QR scanner. Please try again.");
-      });
-    }
-
-    return () => {
-      mounted = false;
-      if (scannerRef.current) {
-        scannerRef.current.stop();
-        scannerRef.current.destroy();
-        scannerRef.current = null;
-      }
-    };
-  }, [scanning]);
 
   const handleJoinLobby = async (qrPayload: string) => {
     try {
@@ -500,7 +451,15 @@ export default function PlayerDashboard() {
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
-                      <video id="qr-video" className="w-full h-full object-cover"></video>
+                      <Scanner 
+                        onScan={(result) => {
+                          if (result && result[0]) {
+                            setScanning(false);
+                            handleJoinLobby(result[0].rawValue);
+                          }
+                        }}
+                        onError={(error) => console.log(error?.message)}
+                      />
                       <div className="absolute inset-0 pointer-events-none border-2 border-emerald-500/50 rounded-lg"></div>
                     </div>
                   )}
