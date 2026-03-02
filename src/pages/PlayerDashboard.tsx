@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
@@ -15,6 +14,7 @@ export default function PlayerDashboard() {
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
   const navigate = useNavigate();
+  const scannerRef = useRef<any>(null);
 
   useEffect(() => {
     useUser().then(u => {
@@ -82,37 +82,67 @@ export default function PlayerDashboard() {
   };
 
   useEffect(() => {
-    if (scanning) {
-      const scanner = new Html5QrcodeScanner(
-        "reader",
-        { 
-          fps: 10, 
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-          showTorchButtonIfSupported: true
-        },
-        /* verbose= */ false
-      );
-      
-      scanner.render(
-        (decodedText) => {
-          scanner.clear();
-          setScanning(false);
-          handleJoinLobby(decodedText);
-        },
-        (errorMessage) => {
-          // parse error, ignore to avoid spamming logs
-        }
-      );
+    let mounted = true;
 
-      return () => {
+    if (scanning) {
+      import('html5-qrcode').then(({ Html5QrcodeScanner }) => {
+        if (!mounted) return;
+
+        // Clear previous instance if any
+        if (scannerRef.current) {
+          try {
+            scannerRef.current.clear();
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        const scanner = new Html5QrcodeScanner(
+          "reader",
+          { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+            showTorchButtonIfSupported: true
+          },
+          /* verbose= */ false
+        );
+        
+        scannerRef.current = scanner;
+        
+        scanner.render(
+          (decodedText) => {
+            if (mounted) {
+              try {
+                scanner.clear();
+              } catch (e) {
+                // ignore
+              }
+              setScanning(false);
+              handleJoinLobby(decodedText);
+            }
+          },
+          (errorMessage) => {
+            // parse error, ignore to avoid spamming logs
+          }
+        );
+      }).catch(err => {
+        console.error("Failed to load html5-qrcode", err);
+        setError("Failed to load QR scanner. Please try again.");
+      });
+    }
+
+    return () => {
+      mounted = false;
+      if (scannerRef.current) {
         try {
-          scanner.clear();
+          scannerRef.current.clear();
         } catch (e) {
           // ignore cleanup errors
         }
-      };
-    }
+        scannerRef.current = null;
+      }
+    };
   }, [scanning]);
 
   const handleJoinLobby = async (qrPayload: string) => {
