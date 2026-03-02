@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,11 +13,22 @@ export default function PlayerDashboard() {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const isMounted = useRef(true);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchLobbies = useCallback(async () => {
     try {
       const data = await apiRequest('/lobbies');
-      setLobbies(data.lobbies || []);
+      if (isMounted.current) {
+        setLobbies(data.lobbies || []);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -25,6 +36,7 @@ export default function PlayerDashboard() {
 
   useEffect(() => {
     useUser().then(u => {
+      if (!isMounted.current) return;
       if (!u) navigate('/login');
       else {
         setUser(u);
@@ -34,33 +46,54 @@ export default function PlayerDashboard() {
 
   useEffect(() => {
     if (scanning) {
-      const scanner = new Html5QrcodeScanner(
-        "reader",
-        { 
-          fps: 10, 
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-          showTorchButtonIfSupported: true
-        },
-        /* verbose= */ false
-      );
-      
-      scanner.render(
-        (decodedText) => {
-          scanner.clear();
-          setScanning(false);
-          handleJoinLobby(decodedText);
-        },
-        (errorMessage) => {
-          // parse error, ignore to avoid spamming logs
+      // Small delay to ensure DOM is ready
+      const timeoutId = setTimeout(() => {
+        if (!isMounted.current || !scanning) return;
+        
+        // Cleanup previous instance if any
+        if (scannerRef.current) {
+          try {
+            scannerRef.current.clear();
+          } catch (e) {
+            console.error("Failed to clear scanner", e);
+          }
         }
-      );
+
+        const scanner = new Html5QrcodeScanner(
+          "reader",
+          { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+            showTorchButtonIfSupported: true
+          },
+          /* verbose= */ false
+        );
+        
+        scannerRef.current = scanner;
+        
+        scanner.render(
+          (decodedText) => {
+            if (isMounted.current) {
+              handleJoinLobby(decodedText);
+              setScanning(false); // This will trigger cleanup via useEffect dependency change
+            }
+          },
+          (errorMessage) => {
+            // parse error, ignore
+          }
+        );
+      }, 100);
 
       return () => {
-        try {
-          scanner.clear();
-        } catch (e) {
-          // ignore cleanup errors
+        clearTimeout(timeoutId);
+        if (scannerRef.current) {
+          try {
+            scannerRef.current.clear().catch(e => console.error("Failed to clear scanner cleanup", e));
+          } catch (e) {
+            // ignore
+          }
+          scannerRef.current = null;
         }
       };
     }
@@ -69,12 +102,20 @@ export default function PlayerDashboard() {
   const handleJoinLobby = async (qrPayload: string) => {
     try {
       const res = await apiRequest('/lobbies/join', 'POST', { qr_payload: qrPayload });
-      setScanResult(`Joined lobby successfully! ID: ${res.lobby_id}`);
-      fetchLobbies(); // Refresh lobbies
-      setTimeout(() => setScanResult(null), 3000);
+      if (isMounted.current) {
+        setScanResult(`Joined lobby successfully! ID: ${res.lobby_id}`);
+        fetchLobbies(); // Refresh lobbies
+        setTimeout(() => {
+          if (isMounted.current) setScanResult(null);
+        }, 3000);
+      }
     } catch (err: any) {
-      setError(err.message);
-      setTimeout(() => setError(''), 5000);
+      if (isMounted.current) {
+        setError(err.message);
+        setTimeout(() => {
+          if (isMounted.current) setError('');
+        }, 5000);
+      }
     }
   };
 
