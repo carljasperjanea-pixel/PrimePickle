@@ -39,7 +39,7 @@ export default function PlayerDashboard() {
       if (!isMounted.current) return;
       if (!u) navigate('/login');
       else {
-        setUser(u);
+      if (isMountedRef.current && user) setUser(u);
       }
     });
   }, [navigate]);
