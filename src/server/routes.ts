@@ -303,7 +303,7 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
     // 2. Fetch all players in this lobby with join time for team assignment
     const { data: lobbyPlayers, error: lpError } = await supabase
       .from('lobby_players')
-      .select('joined_at, team, profiles(id, display_name, avatar_url, mmr)')
+      .select('joined_at, team, is_ready, profiles(id, display_name, avatar_url, mmr)')
       .eq('lobby_id', lobbyData.id)
       .order('joined_at', { ascending: true });
 
@@ -313,13 +313,47 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
     const playersWithTeams = lobbyPlayers.map((lp: any, index: number) => ({
       ...lp.profiles,
       joined_at: lp.joined_at,
-      team: lp.team || (index < 2 ? 'A' : 'B')
+      team: lp.team || (index < 2 ? 'A' : 'B'),
+      is_ready: lp.is_ready || false
     }));
 
     res.json({ lobby: lobbyData, players: playersWithTeams });
   } catch (error) {
     console.error('Fetch active lobby error:', error);
     res.status(500).json({ error: 'Failed to fetch active lobby' });
+  }
+});
+
+// Toggle Ready Status
+router.post('/lobbies/ready', authenticateToken, async (req: any, res) => {
+  const { lobby_id, is_ready } = req.body;
+
+  try {
+    // Check if user is in this lobby
+    const { data: membership, error: memError } = await supabase
+      .from('lobby_players')
+      .select('is_ready')
+      .eq('lobby_id', lobby_id)
+      .eq('profile_id', req.user.id)
+      .single();
+
+    if (memError || !membership) {
+      return res.status(400).json({ error: 'You are not in this lobby' });
+    }
+
+    // Update ready status
+    const { error: updateError } = await supabase
+      .from('lobby_players')
+      .update({ is_ready })
+      .eq('lobby_id', lobby_id)
+      .eq('profile_id', req.user.id);
+
+    if (updateError) throw updateError;
+
+    res.json({ message: `Ready status updated to ${is_ready}` });
+  } catch (error: any) {
+    console.error('Toggle ready error:', error);
+    res.status(500).json({ error: 'Failed to update ready status' });
   }
 });
 

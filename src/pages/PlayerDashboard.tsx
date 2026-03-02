@@ -119,6 +119,20 @@ export default function PlayerDashboard() {
     }
   };
 
+  const handleReadyToggle = async () => {
+    try {
+      const currentUser = activeLobbyPlayers.find(p => p.id === user.id);
+      if (!currentUser) return;
+      
+      const newStatus = !currentUser.is_ready;
+      await apiRequest('/lobbies/ready', 'POST', { lobby_id: activeLobby.id, is_ready: newStatus });
+      fetchActiveLobby();
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
   const handleLogout = () => {
     document.cookie = 'token=; Max-Age=0; path=/;';
     navigate('/login');
@@ -266,14 +280,20 @@ export default function PlayerDashboard() {
                           <div className="space-y-2">
                             {activeLobbyPlayers.filter(p => p.team === 'A').map((p: any) => (
                               <div key={p.id} className="flex items-center gap-2 bg-white border border-blue-100 rounded-md p-2 shadow-sm">
-                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0 relative">
                                   {p.avatar_url ? (
                                     <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
                                   ) : (
                                     p.display_name?.slice(0, 2).toUpperCase() || '??'
                                   )}
+                                  {p.is_ready && (
+                                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                                  )}
                                 </div>
-                                <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
+                                  {p.is_ready && <span className="text-[10px] text-green-600 font-bold leading-none">READY</span>}
+                                </div>
                                 {p.id === user.id && <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">YOU</span>}
                               </div>
                             ))}
@@ -305,14 +325,20 @@ export default function PlayerDashboard() {
                           <div className="space-y-2">
                             {activeLobbyPlayers.filter(p => p.team === 'B').map((p: any) => (
                               <div key={p.id} className="flex items-center gap-2 bg-white border border-orange-100 rounded-md p-2 shadow-sm">
-                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0 relative">
                                   {p.avatar_url ? (
                                     <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
                                   ) : (
                                     p.display_name?.slice(0, 2).toUpperCase() || '??'
                                   )}
+                                  {p.is_ready && (
+                                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                                  )}
                                 </div>
-                                <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
+                                  {p.is_ready && <span className="text-[10px] text-green-600 font-bold leading-none">READY</span>}
+                                </div>
                                 {p.id === user.id && <span className="ml-auto text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">YOU</span>}
                               </div>
                             ))}
@@ -335,13 +361,27 @@ export default function PlayerDashboard() {
                     </div>
                   </div>
                   
-                  <Button 
-                    variant="destructive"
-                    className="w-full h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md"
-                    onClick={() => handleLeaveLobby(activeLobby.id)}
-                  >
-                    <LogOut className="w-5 h-5 mr-2" /> Leave Lobby
-                  </Button>
+                  <div className="flex gap-3">
+                    <Button 
+                      className={`flex-1 h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md ${
+                        activeLobbyPlayers.find(p => p.id === user.id)?.is_ready 
+                          ? 'bg-amber-500 hover:bg-amber-600 text-white' 
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      }`}
+                      onClick={handleReadyToggle}
+                    >
+                      {activeLobbyPlayers.find(p => p.id === user.id)?.is_ready ? 'Not Ready' : 'Ready Up!'}
+                    </Button>
+
+                    <Button 
+                      variant="destructive"
+                      className="h-12 w-12 p-0 shadow-sm transition-all hover:shadow-md shrink-0"
+                      onClick={() => handleLeaveLobby(activeLobby.id)}
+                      title="Leave Lobby"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <>
