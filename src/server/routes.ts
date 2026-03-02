@@ -300,20 +300,23 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
       return res.json({ lobby: null, players: [] });
     }
 
-    // 2. Fetch all players in this lobby (Visibility: see all other players)
-    const { data: players, error: playersError } = await supabase
-      .from('profiles')
-      .select('id, display_name, avatar_url, mmr')
-      .in('id', (
-        await supabase
-          .from('lobby_players')
-          .select('profile_id')
-          .eq('lobby_id', lobbyData.id)
-      ).data?.map((lp: any) => lp.profile_id) || []);
+    // 2. Fetch all players in this lobby with join time for team assignment
+    const { data: lobbyPlayers, error: lpError } = await supabase
+      .from('lobby_players')
+      .select('joined_at, profiles(id, display_name, avatar_url, mmr)')
+      .eq('lobby_id', lobbyData.id)
+      .order('joined_at', { ascending: true });
 
-    if (playersError) throw playersError;
+    if (lpError) throw lpError;
 
-    res.json({ lobby: lobbyData, players });
+    // Assign teams based on join order (First 2 = Team A, Next 2 = Team B)
+    const playersWithTeams = lobbyPlayers.map((lp: any, index: number) => ({
+      ...lp.profiles,
+      joined_at: lp.joined_at,
+      team: index < 2 ? 'A' : 'B'
+    }));
+
+    res.json({ lobby: lobbyData, players: playersWithTeams });
   } catch (error) {
     console.error('Fetch active lobby error:', error);
     res.status(500).json({ error: 'Failed to fetch active lobby' });

@@ -40,9 +40,12 @@ export default function PlayerDashboard() {
       const data = await apiRequest('/lobbies/active');
       if (data.players) {
         setActiveLobbyPlayers(data.players);
+      } else {
+        setActiveLobbyPlayers([]);
       }
     } catch (e) {
       console.error("Failed to fetch active lobby players", e);
+      setActiveLobbyPlayers([]);
     }
   };
 
@@ -242,17 +245,25 @@ export default function PlayerDashboard() {
                       {/* Active Players List */}
                       <div className="mt-4 mb-2">
                         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Players ({activeLobbyPlayers.length}/4)</h4>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-col gap-2">
                           {activeLobbyPlayers.map((p: any) => (
-                            <div key={p.id} className="flex items-center gap-2 bg-white border rounded-full px-3 py-1 shadow-sm">
-                              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden">
-                                {p.avatar_url ? (
-                                  <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
-                                ) : (
-                                  p.display_name.slice(0, 2).toUpperCase()
-                                )}
+                            <div key={p.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2 shadow-sm">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                                  {p.avatar_url ? (
+                                    <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    p.display_name?.slice(0, 2).toUpperCase() || '??'
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{p.display_name}</div>
+                                  <div className="text-xs text-gray-500">MMR: {p.mmr}</div>
+                                </div>
                               </div>
-                              <span className="text-sm font-medium text-gray-700">{p.display_name}</span>
+                              <div className={`px-2 py-1 rounded text-xs font-bold ${p.team === 'A' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                Team {p.team}
+                              </div>
                             </div>
                           ))}
                         </div>
