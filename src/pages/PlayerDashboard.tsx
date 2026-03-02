@@ -94,6 +94,21 @@ export default function PlayerDashboard() {
 
   // Recent Matches (Completed Lobbies)
   const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
+  
+  // Active Lobby (Open or Full)
+  const activeLobby = lobbies.find(l => l.status === 'open' || l.status === 'full');
+
+  const handleLeaveLobby = async (lobbyId: string) => {
+    try {
+      await apiRequest('/lobbies/leave', 'POST', { lobby_id: lobbyId });
+      setScanResult('Left lobby successfully');
+      fetchLobbies(); // Refresh lobbies
+      setTimeout(() => setScanResult(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -196,65 +211,92 @@ export default function PlayerDashboard() {
           {/* Scan Action Card */}
           <Card className="border-emerald-200 bg-emerald-50/30 shadow-md">
             <CardContent className="p-6">
-              <div className="flex items-start gap-4 mb-6">
-                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
-                  <Camera className="w-6 h-6" />
-                </div>
+              {activeLobby ? (
                 <div>
-                  <h3 className="font-bold text-gray-900">Ready to Play?</h3>
-                  <p className="text-sm text-gray-600 mt-1">Scan the court's QR code to join a lobby and start your match</p>
-                </div>
-              </div>
-
-              {!scanning ? (
-                <div className="space-y-4">
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                      <Activity className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">Active Lobby</h3>
+                      <p className="text-sm text-gray-600 mt-1">You are currently in a lobby waiting for the match to start.</p>
+                      <div className="mt-2 text-xs font-mono bg-gray-100 px-2 py-1 rounded inline-block">
+                        Lobby ID: {activeLobby.id.slice(0, 8)}
+                      </div>
+                    </div>
+                  </div>
+                  
                   <Button 
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md"
-                    onClick={() => setScanning(true)}
+                    variant="destructive"
+                    className="w-full h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md"
+                    onClick={() => handleLeaveLobby(activeLobby.id)}
                   >
-                    <QrCode className="w-5 h-5 mr-2" /> Scan QR Code to Join Match
+                    <LogOut className="w-5 h-5 mr-2" /> Leave Lobby
                   </Button>
-                  
-                  {/* Manual Entry Fallback */}
-                  <div className="flex items-center gap-2">
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                    <span className="text-xs text-gray-400 uppercase font-medium">Or enter code</span>
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Enter Lobby Code manually..." 
-                      className="flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleJoinLobby((e.target as HTMLInputElement).value);
-                        }
-                      }}
-                    />
-                  </div>
-
-                  {scanResult && (
-                    <div className="p-3 bg-green-100 text-green-800 rounded-md text-sm font-medium text-center animate-in fade-in slide-in-from-top-2">
-                      {scanResult}
-                    </div>
-                  )}
-                  {error && (
-                    <div className="p-3 bg-red-100 text-red-800 rounded-md text-sm font-medium text-center animate-in fade-in slide-in-from-top-2">
-                      {error}
-                    </div>
-                  )}
                 </div>
               ) : (
-                <div className="bg-white p-4 rounded-lg border shadow-inner">
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-semibold text-sm">Scanning...</h4>
-                    <Button variant="ghost" size="sm" onClick={() => setScanning(false)} className="h-8 w-8 p-0 rounded-full">
-                      <X className="w-4 h-4" />
-                    </Button>
+                <>
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                      <Camera className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">Ready to Play?</h3>
+                      <p className="text-sm text-gray-600 mt-1">Scan the court's QR code to join a lobby and start your match</p>
+                    </div>
                   </div>
-                  <div id="reader" className="w-full rounded-lg overflow-hidden"></div>
+
+                  {!scanning ? (
+                    <div className="space-y-4">
+                      <Button 
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md"
+                        onClick={() => setScanning(true)}
+                      >
+                        <QrCode className="w-5 h-5 mr-2" /> Scan QR Code to Join Match
+                      </Button>
+                      
+                      {/* Manual Entry Fallback */}
+                      <div className="flex items-center gap-2">
+                        <div className="h-px bg-gray-200 flex-1"></div>
+                        <span className="text-xs text-gray-400 uppercase font-medium">Or enter code</span>
+                        <div className="h-px bg-gray-200 flex-1"></div>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Enter Lobby Code manually..." 
+                          className="flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleJoinLobby((e.target as HTMLInputElement).value);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white p-4 rounded-lg border shadow-inner">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-semibold text-sm">Scanning...</h4>
+                        <Button variant="ghost" size="sm" onClick={() => setScanning(false)} className="h-8 w-8 p-0 rounded-full">
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div id="reader" className="w-full rounded-lg overflow-hidden"></div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {scanResult && (
+                <div className="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-sm font-medium text-center animate-in fade-in slide-in-from-top-2">
+                  {scanResult}
+                </div>
+              )}
+              {error && (
+                <div className="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-sm font-medium text-center animate-in fade-in slide-in-from-top-2">
+                  {error}
                 </div>
               )}
             </CardContent>

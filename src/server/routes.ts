@@ -347,6 +347,61 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Leave Lobby
+router.post('/lobbies/leave', authenticateToken, async (req: any, res) => {
+  const { lobby_id } = req.body;
+
+  try {
+    // Check if player is in lobby
+    const { data: existing, error: existingError } = await supabase
+      .from('lobby_players')
+      .select('*')
+      .eq('lobby_id', lobby_id)
+      .eq('profile_id', req.user.id)
+      .single();
+
+    if (existingError || !existing) {
+      return res.status(400).json({ error: 'Not in this lobby' });
+    }
+
+    // Remove player
+    const { error: deleteError } = await supabase
+      .from('lobby_players')
+      .delete()
+      .eq('lobby_id', lobby_id)
+      .eq('profile_id', req.user.id);
+
+    if (deleteError) throw deleteError;
+
+    // Check remaining player count
+    const { count, error: countError } = await supabase
+      .from('lobby_players')
+      .select('*', { count: 'exact', head: true })
+      .eq('lobby_id', lobby_id);
+
+    if (countError) throw countError;
+
+    // If lobby was full, set back to open
+    const { data: lobby } = await supabase
+      .from('lobbies')
+      .select('status')
+      .eq('id', lobby_id)
+      .single();
+
+    if (lobby && lobby.status === 'full' && (count || 0) < 4) {
+      await supabase
+        .from('lobbies')
+        .update({ status: 'open' })
+        .eq('id', lobby_id);
+    }
+
+    res.json({ message: 'Left lobby successfully' });
+  } catch (error) {
+    console.error('Leave lobby error:', error);
+    res.status(500).json({ error: 'Failed to leave lobby' });
+  }
+});
+
 // Get Lobby Details (Players in lobby)
 router.get('/lobbies/:id', authenticateToken, async (req: any, res) => {
   try {
