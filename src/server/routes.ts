@@ -443,31 +443,47 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
 
     // Determine Team Assignment
     let team = 'A';
+    let teamColumnExists = true;
+
     const { count: countA, error: countAError } = await supabase
       .from('lobby_players')
       .select('*', { count: 'exact', head: true })
       .eq('lobby_id', lobby.id)
       .eq('team', 'A');
     
-    if (!countAError) {
+    if (countAError) {
+      // If error is due to missing column, mark it
+      if (countAError.code === '42703') {
+        teamColumnExists = false;
+      }
+      // Ignore other errors for count check
+    } else {
       team = (countA || 0) < 2 ? 'A' : 'B';
     }
     
     // Join
-    const { error: joinError } = await supabase
-      .from('lobby_players')
-      .insert([{ lobby_id: lobby.id, profile_id: req.user.id, team }]);
+    if (teamColumnExists) {
+      const { error: joinError } = await supabase
+        .from('lobby_players')
+        .insert([{ lobby_id: lobby.id, profile_id: req.user.id, team }]);
 
-    if (joinError) {
-      // Fallback if 'team' column doesn't exist
-      if (joinError.code === '42703') {
-        const { error: retryError } = await supabase
-          .from('lobby_players')
-          .insert([{ lobby_id: lobby.id, profile_id: req.user.id }]);
-        if (retryError) throw retryError;
-      } else {
-        throw joinError;
+      if (joinError) {
+        // Fallback if 'team' column doesn't exist (double check)
+        if (joinError.code === '42703') {
+          const { error: retryError } = await supabase
+            .from('lobby_players')
+            .insert([{ lobby_id: lobby.id, profile_id: req.user.id }]);
+          if (retryError) throw retryError;
+        } else {
+          throw joinError;
+        }
       }
+    } else {
+      // Known missing column, insert without team
+      const { error: joinError } = await supabase
+        .from('lobby_players')
+        .insert([{ lobby_id: lobby.id, profile_id: req.user.id }]);
+      if (joinError) throw joinError;
     }
     
     // If full (4 players), update status
