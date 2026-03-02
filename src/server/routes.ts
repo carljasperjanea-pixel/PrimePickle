@@ -281,11 +281,30 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Run Schema Migration (Temporary)
+router.get('/admin/migrate-schema', async (req, res) => {
+  try {
+    // Attempt to add columns if they don't exist
+    // Note: Supabase JS client doesn't support DDL directly usually, but we can try via RPC if setup, 
+    // or we just have to hope the user runs the SQL.
+    // However, since I cannot run SQL directly, I will assume the columns are added or I will try to use them.
+    // If this fails, the user needs to run the SQL manually.
+    
+    // Actually, I can't run DDL here. I will just log that this needs to be done.
+    console.log('Please run the following SQL in your Supabase SQL Editor:');
+    console.log('ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS team text;');
+    console.log('ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS slot_index int;');
+    
+    res.json({ message: 'Please check server logs for SQL commands to run.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Migration failed' });
+  }
+});
+
 // Get Active Lobby and its Players (Visibility System)
 router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
   try {
     // 1. Find the active lobby for this user
-    // This enforces the restriction: we only look for lobbies that are NOT completed.
     const { data: activeLobbies, error: lobbyError } = await supabase
       .from('lobbies')
       .select('*, lobby_players!inner(profile_id)')
@@ -300,20 +319,21 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
       return res.json({ lobby: null, players: [] });
     }
 
-    // 2. Fetch all players in this lobby with join time for team assignment
+    // 2. Fetch all players in this lobby with slot/team info
     const { data: lobbyPlayers, error: lpError } = await supabase
       .from('lobby_players')
-      .select('joined_at, profiles(id, display_name, avatar_url, mmr)')
+      .select('joined_at, team, slot_index, profiles(id, display_name, avatar_url, mmr)')
       .eq('lobby_id', lobbyData.id)
-      .order('joined_at', { ascending: true });
+      .order('slot_index', { ascending: true });
 
     if (lpError) throw lpError;
 
-    // Assign teams based on join order (First 2 = Team A, Next 2 = Team B)
-    const playersWithTeams = lobbyPlayers.map((lp: any, index: number) => ({
+    // Map players
+    const playersWithTeams = lobbyPlayers.map((lp: any) => ({
       ...lp.profiles,
       joined_at: lp.joined_at,
-      team: index < 2 ? 'A' : 'B'
+      team: lp.team,
+      slot_index: lp.slot_index
     }));
 
     res.json({ lobby: lobbyData, players: playersWithTeams });
@@ -348,11 +368,9 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
 
     if (activeLobbies && activeLobbies.length > 0) {
       const active = activeLobbies[0];
-      // If already in THIS lobby, return success (idempotent)
       if (active.id === lobby.id) {
         return res.json({ message: 'Already joined', lobby_id: lobby.id });
       }
-      // Otherwise, block joining a new one
       return res.status(400).json({ error: 'You are already in an active lobby. Please leave it first.' });
     }
     
@@ -360,37 +378,107 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
       return res.status(400).json({ error: 'Lobby is not open' });
     }
     
-    // Check player count
-    const { count, error: countError } = await supabase
+    // Get current players to determine next slot
+    const { data: currentPlayers, error: cpError } = await supabase
       .from('lobby_players')
-      .select('*', { count: 'exact', head: true })
+      .select('slot_index')
       .eq('lobby_id', lobby.id);
 
-    if (countError) throw countError;
+    if (cpError) throw cpError;
     
-    if ((count || 0) >= 4) {
+    const occupiedSlots = currentPlayers.map((p: any) => p.slot_index);
+    let nextSlot = -1;
+    // Find first available slot (0-3)
+    for (let i = 0; i < 4; i++) {
+      if (!occupiedSlots.includes(i)) {
+        nextSlot = i;
+        break;
+      }
+    }
+
+    if (nextSlot === -1) {
       return res.status(400).json({ error: 'Lobby is full' });
     }
+
+    // Assign Team based on Slot
+    // Slots 0,1 -> Team A
+    // Slots 2,3 -> Team B
+    const team = nextSlot < 2 ? 'A' : 'B';
     
-    // Join
+    // Join with Slot and Team
     const { error: joinError } = await supabase
       .from('lobby_players')
-      .insert([{ lobby_id: lobby.id, profile_id: req.user.id }]);
+      .insert([{ 
+        lobby_id: lobby.id, 
+        profile_id: req.user.id,
+        slot_index: nextSlot,
+        team: team
+      }]);
 
     if (joinError) throw joinError;
     
-    // If full (4 players), update status
-    if ((count || 0) + 1 === 4) {
+    // Check if now full
+    if (occupiedSlots.length + 1 === 4) {
       await supabase
         .from('lobbies')
         .update({ status: 'full' })
         .eq('id', lobby.id);
     }
     
-    res.json({ message: 'Joined successfully', lobby_id: lobby.id });
+    res.json({ message: 'Joined successfully', lobby_id: lobby.id, slot: nextSlot, team });
   } catch (error) {
     console.error('Join lobby error:', error);
     res.status(500).json({ error: 'Failed to join lobby' });
+  }
+});
+
+// Switch Slot/Team
+router.post('/lobbies/switch-slot', authenticateToken, async (req: any, res) => {
+  const { target_slot } = req.body; // 0-3
+
+  if (target_slot < 0 || target_slot > 3) {
+    return res.status(400).json({ error: 'Invalid slot index' });
+  }
+
+  try {
+    // Get active lobby for user
+    const { data: activeLobbies } = await supabase
+      .from('lobbies')
+      .select('*, lobby_players!inner(profile_id)')
+      .eq('lobby_players.profile_id', req.user.id)
+      .neq('status', 'completed');
+
+    const lobby = activeLobbies?.[0];
+    if (!lobby) return res.status(400).json({ error: 'No active lobby found' });
+
+    // Check if target slot is occupied
+    const { data: occupied } = await supabase
+      .from('lobby_players')
+      .select('*')
+      .eq('lobby_id', lobby.id)
+      .eq('slot_index', target_slot)
+      .single();
+
+    if (occupied) {
+      return res.status(400).json({ error: 'Slot is already occupied' });
+    }
+
+    // Determine new team
+    const newTeam = target_slot < 2 ? 'A' : 'B';
+
+    // Update user's slot and team
+    const { error: updateError } = await supabase
+      .from('lobby_players')
+      .update({ slot_index: target_slot, team: newTeam })
+      .eq('lobby_id', lobby.id)
+      .eq('profile_id', req.user.id);
+
+    if (updateError) throw updateError;
+
+    res.json({ message: 'Slot updated', slot: target_slot, team: newTeam });
+  } catch (error) {
+    console.error('Switch slot error:', error);
+    res.status(500).json({ error: 'Failed to switch slot' });
   }
 });
 

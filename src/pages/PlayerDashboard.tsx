@@ -109,6 +109,29 @@ export default function PlayerDashboard() {
     }
   };
 
+  const handleSwitchSlot = async (targetSlot: number) => {
+    try {
+      await apiRequest('/lobbies/switch-slot', 'POST', { target_slot: targetSlot });
+      fetchActiveLobby(); // Refresh to see changes
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
+    }
+  };
+
+  // Poll for lobby updates
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (activeLobby) {
+      fetchActiveLobby(); // Initial fetch
+      interval = setInterval(() => {
+        fetchActiveLobby();
+        fetchLobbies(); // Keep lobby status in sync
+      }, 3000); // Poll every 3s
+    }
+    return () => clearInterval(interval);
+  }, [activeLobby?.id]); // Depend on lobby ID to start/stop polling
+
   const handleLogout = () => {
     document.cookie = 'token=; Max-Age=0; path=/;';
     navigate('/login');
@@ -244,28 +267,87 @@ export default function PlayerDashboard() {
                       
                       {/* Active Players List */}
                       <div className="mt-4 mb-2">
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Players ({activeLobbyPlayers.length}/4)</h4>
-                        <div className="flex flex-col gap-2">
-                          {activeLobbyPlayers.map((p: any) => (
-                            <div key={p.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2 shadow-sm">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
-                                  {p.avatar_url ? (
-                                    <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Lobby Slots</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Team A Slots (0, 1) */}
+                          <div className="space-y-2">
+                            <h5 className="text-xs font-bold text-blue-700 uppercase">Team A</h5>
+                            {[0, 1].map(slotIndex => {
+                              const player = activeLobbyPlayers.find(p => p.slot_index === slotIndex);
+                              const isMe = player?.id === user.id;
+                              return (
+                                <div 
+                                  key={slotIndex}
+                                  onClick={() => !player && handleSwitchSlot(slotIndex)}
+                                  className={`
+                                    flex items-center gap-2 border rounded-lg p-2 shadow-sm transition-all
+                                    ${player ? 'bg-white border-blue-100' : 'bg-gray-50 border-dashed border-gray-300 cursor-pointer hover:bg-blue-50 hover:border-blue-300'}
+                                    ${isMe ? 'ring-2 ring-blue-400' : ''}
+                                  `}
+                                >
+                                  {player ? (
+                                    <>
+                                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                                        {player.avatar_url ? (
+                                          <img src={player.avatar_url} alt={player.display_name} className="w-full h-full object-cover" />
+                                        ) : (
+                                          player.display_name?.slice(0, 2).toUpperCase() || '??'
+                                        )}
+                                      </div>
+                                      <div className="overflow-hidden">
+                                        <div className="text-sm font-medium text-gray-900 truncate">{player.display_name}</div>
+                                        <div className="text-xs text-gray-500">MMR: {player.mmr}</div>
+                                      </div>
+                                    </>
                                   ) : (
-                                    p.display_name?.slice(0, 2).toUpperCase() || '??'
+                                    <div className="flex items-center justify-center w-full h-8 text-xs text-gray-400 font-medium">
+                                      Empty Slot
+                                    </div>
                                   )}
                                 </div>
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900">{p.display_name}</div>
-                                  <div className="text-xs text-gray-500">MMR: {p.mmr}</div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Team B Slots (2, 3) */}
+                          <div className="space-y-2">
+                            <h5 className="text-xs font-bold text-orange-700 uppercase">Team B</h5>
+                            {[2, 3].map(slotIndex => {
+                              const player = activeLobbyPlayers.find(p => p.slot_index === slotIndex);
+                              const isMe = player?.id === user.id;
+                              return (
+                                <div 
+                                  key={slotIndex}
+                                  onClick={() => !player && handleSwitchSlot(slotIndex)}
+                                  className={`
+                                    flex items-center gap-2 border rounded-lg p-2 shadow-sm transition-all
+                                    ${player ? 'bg-white border-orange-100' : 'bg-gray-50 border-dashed border-gray-300 cursor-pointer hover:bg-orange-50 hover:border-orange-300'}
+                                    ${isMe ? 'ring-2 ring-orange-400' : ''}
+                                  `}
+                                >
+                                  {player ? (
+                                    <>
+                                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden shrink-0">
+                                        {player.avatar_url ? (
+                                          <img src={player.avatar_url} alt={player.display_name} className="w-full h-full object-cover" />
+                                        ) : (
+                                          player.display_name?.slice(0, 2).toUpperCase() || '??'
+                                        )}
+                                      </div>
+                                      <div className="overflow-hidden">
+                                        <div className="text-sm font-medium text-gray-900 truncate">{player.display_name}</div>
+                                        <div className="text-xs text-gray-500">MMR: {player.mmr}</div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="flex items-center justify-center w-full h-8 text-xs text-gray-400 font-medium">
+                                      Empty Slot
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                              <div className={`px-2 py-1 rounded text-xs font-bold ${p.team === 'A' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
-                                Team {p.team}
-                              </div>
-                            </div>
-                          ))}
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     </div>
