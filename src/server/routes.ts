@@ -296,21 +296,26 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
     if (lobbyError || !lobby) {
       return res.status(404).json({ error: 'Invalid QR Code' });
     }
+
+    // Check if player is already in ANY active lobby (status != completed)
+    const { data: activeLobbies } = await supabase
+      .from('lobbies')
+      .select('*, lobby_players!inner(profile_id)')
+      .eq('lobby_players.profile_id', req.user.id)
+      .neq('status', 'completed');
+
+    if (activeLobbies && activeLobbies.length > 0) {
+      const active = activeLobbies[0];
+      // If already in THIS lobby, return success (idempotent)
+      if (active.id === lobby.id) {
+        return res.json({ message: 'Already joined', lobby_id: lobby.id });
+      }
+      // Otherwise, block joining a new one
+      return res.status(400).json({ error: 'You are already in an active lobby. Please leave it first.' });
+    }
     
     if (lobby.status !== 'open') {
       return res.status(400).json({ error: 'Lobby is not open' });
-    }
-    
-    // Check if player is already in lobby
-    const { data: existing } = await supabase
-      .from('lobby_players')
-      .select('*')
-      .eq('lobby_id', lobby.id)
-      .eq('profile_id', req.user.id)
-      .single();
-
-    if (existing) {
-      return res.json({ message: 'Already joined', lobby_id: lobby.id });
     }
     
     // Check player count
