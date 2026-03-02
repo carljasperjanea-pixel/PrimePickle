@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
@@ -34,6 +34,9 @@ export default function PlayerDashboard() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Active Lobby (Open, Full, or In Progress)
+  const activeLobby = lobbies.find(l => ['open', 'full', 'in_progress'].includes(l.status));
 
   // Countdown Logic
   useEffect(() => {
@@ -147,9 +150,6 @@ export default function PlayerDashboard() {
   // Recent Matches (Completed Lobbies)
   const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
   
-  // Active Lobby (Open, Full, or In Progress)
-  const activeLobby = lobbies.find(l => ['open', 'full', 'in_progress'].includes(l.status));
-
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* Header */}
@@ -458,7 +458,7 @@ export default function PlayerDashboard() {
                             handleJoinLobby(result[0].rawValue);
                           }
                         }}
-                        onError={(error) => console.log(error?.message)}
+                        onError={(error: any) => console.log(error?.message)}
                       />
                       <div className="absolute inset-0 pointer-events-none border-2 border-emerald-500/50 rounded-lg"></div>
                     </div>
