@@ -10,6 +10,7 @@ export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
   const [lobbies, setLobbies] = useState<any[]>([]);
   const [activeLobbyPlayers, setActiveLobbyPlayers] = useState<any[]>([]);
+  const [currentLobby, setCurrentLobby] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -35,13 +36,10 @@ export default function PlayerDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Active Lobby (Open, Full, or In Progress)
-  const activeLobby = lobbies.find(l => ['open', 'full', 'in_progress'].includes(l.status));
-
   // Countdown Logic
   useEffect(() => {
-    if (activeLobby?.status === 'in_progress' && activeLobby.started_at) {
-      const startTime = new Date(activeLobby.started_at).getTime();
+    if (currentLobby?.status === 'in_progress' && currentLobby.started_at) {
+      const startTime = new Date(currentLobby.started_at).getTime();
       const now = new Date().getTime();
       const diff = Math.ceil((startTime + 3000 - now) / 1000); // 3 seconds from start
 
@@ -59,7 +57,7 @@ export default function PlayerDashboard() {
         return () => clearInterval(timer);
       }
     }
-  }, [activeLobby?.status, activeLobby?.started_at]);
+  }, [currentLobby?.status, currentLobby?.started_at]);
 
   const fetchLobbies = async () => {
     try {
@@ -73,6 +71,12 @@ export default function PlayerDashboard() {
   const fetchActiveLobby = async () => {
     try {
       const data = await apiRequest('/lobbies/active');
+      if (data.lobby) {
+        setCurrentLobby(data.lobby);
+      } else {
+        setCurrentLobby(null);
+      }
+      
       if (data.players) {
         setActiveLobbyPlayers(data.players);
       } else {
@@ -81,6 +85,7 @@ export default function PlayerDashboard() {
     } catch (e) {
       console.error("Failed to fetch active lobby players", e);
       setActiveLobbyPlayers([]);
+      setCurrentLobby(null);
     }
   };
 
@@ -112,7 +117,7 @@ export default function PlayerDashboard() {
 
   const handleSwitchTeam = async (team: string) => {
     try {
-      await apiRequest('/lobbies/team', 'POST', { lobby_id: activeLobby.id, team });
+      await apiRequest('/lobbies/team', 'POST', { lobby_id: currentLobby.id, team });
       fetchActiveLobby();
     } catch (err: any) {
       setError(err.message);
@@ -126,7 +131,7 @@ export default function PlayerDashboard() {
       if (!currentUser) return;
       
       const newStatus = !currentUser.is_ready;
-      const res = await apiRequest('/lobbies/ready', 'POST', { lobby_id: activeLobby.id, is_ready: newStatus });
+      const res = await apiRequest('/lobbies/ready', 'POST', { lobby_id: currentLobby.id, is_ready: newStatus });
       
       fetchActiveLobby();
       fetchLobbies(); // Update lobby status immediately
@@ -265,7 +270,7 @@ export default function PlayerDashboard() {
             )}
 
             <CardContent className="p-6">
-              {activeLobby ? (
+              {currentLobby ? (
                 <div>
                   <div className="flex items-start gap-4 mb-6">
                     <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
@@ -273,21 +278,21 @@ export default function PlayerDashboard() {
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-900">
-                        {activeLobby.status === 'in_progress' ? 'Match In Progress' : 'Active Lobby'}
+                        {currentLobby.status === 'in_progress' ? 'Match In Progress' : 'Active Lobby'}
                       </h3>
                       <p className="text-sm text-gray-600 mt-1">
-                        {activeLobby.status === 'in_progress' 
+                        {currentLobby.status === 'in_progress' 
                           ? 'Good luck! Play your best.' 
                           : 'You are currently in a lobby waiting for the match to start.'}
                       </p>
                       <div className="mt-2 text-xs font-mono bg-gray-100 px-2 py-1 rounded inline-block">
-                        Lobby ID: {activeLobby.id.slice(0, 8)}
+                        Lobby ID: {currentLobby.id.slice(0, 8)}
                       </div>
                       
                       {/* Teams Display */}
                       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Team A */}
-                        <div className={`rounded-lg p-3 border ${activeLobby.status === 'in_progress' ? 'bg-blue-100 border-blue-300' : 'bg-blue-50/50 border-blue-100'}`}>
+                        <div className={`rounded-lg p-3 border ${currentLobby.status === 'in_progress' ? 'bg-blue-100 border-blue-300' : 'bg-blue-50/50 border-blue-100'}`}>
                           <div className="flex justify-between items-center mb-3">
                             <h4 className="font-bold text-blue-800 text-sm uppercase tracking-wider">Team A</h4>
                             <span className="text-xs font-mono bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">
@@ -304,20 +309,20 @@ export default function PlayerDashboard() {
                                   ) : (
                                     p.display_name?.slice(0, 2).toUpperCase() || '??'
                                   )}
-                                  {p.is_ready && activeLobby.status !== 'in_progress' && (
+                                  {p.is_ready && currentLobby.status !== 'in_progress' && (
                                     <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
                                   )}
                                 </div>
                                 <div className="flex flex-col min-w-0">
                                   <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
-                                  {p.is_ready && activeLobby.status !== 'in_progress' && <span className="text-[10px] text-green-600 font-bold leading-none">READY</span>}
+                                  {p.is_ready && currentLobby.status !== 'in_progress' && <span className="text-[10px] text-green-600 font-bold leading-none">READY</span>}
                                 </div>
                                 {p.id === user.id && <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">YOU</span>}
                               </div>
                             ))}
                             
                             {/* Join Team A Button */}
-                            {activeLobby.status !== 'in_progress' && 
+                            {currentLobby.status !== 'in_progress' && 
                              activeLobbyPlayers.find(p => p.id === user.id)?.team !== 'A' && 
                              activeLobbyPlayers.filter(p => p.team === 'A').length < 2 && (
                               <Button 
@@ -333,7 +338,7 @@ export default function PlayerDashboard() {
                         </div>
 
                         {/* Team B */}
-                        <div className={`rounded-lg p-3 border ${activeLobby.status === 'in_progress' ? 'bg-orange-100 border-orange-300' : 'bg-orange-50/50 border-orange-100'}`}>
+                        <div className={`rounded-lg p-3 border ${currentLobby.status === 'in_progress' ? 'bg-orange-100 border-orange-300' : 'bg-orange-50/50 border-orange-100'}`}>
                           <div className="flex justify-between items-center mb-3">
                             <h4 className="font-bold text-orange-800 text-sm uppercase tracking-wider">Team B</h4>
                             <span className="text-xs font-mono bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full">
@@ -350,20 +355,20 @@ export default function PlayerDashboard() {
                                   ) : (
                                     p.display_name?.slice(0, 2).toUpperCase() || '??'
                                   )}
-                                  {p.is_ready && activeLobby.status !== 'in_progress' && (
+                                  {p.is_ready && currentLobby.status !== 'in_progress' && (
                                     <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
                                   )}
                                 </div>
                                 <div className="flex flex-col min-w-0">
                                   <span className="text-sm font-medium text-gray-700 truncate">{p.display_name}</span>
-                                  {p.is_ready && activeLobby.status !== 'in_progress' && <span className="text-[10px] text-green-600 font-bold leading-none">READY</span>}
+                                  {p.is_ready && currentLobby.status !== 'in_progress' && <span className="text-[10px] text-green-600 font-bold leading-none">READY</span>}
                                 </div>
                                 {p.id === user.id && <span className="ml-auto text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">YOU</span>}
                               </div>
                             ))}
 
                             {/* Join Team B Button */}
-                            {activeLobby.status !== 'in_progress' && 
+                            {currentLobby.status !== 'in_progress' && 
                              activeLobbyPlayers.find(p => p.id === user.id)?.team !== 'B' && 
                              activeLobbyPlayers.filter(p => p.team === 'B').length < 2 && (
                               <Button 
@@ -381,7 +386,7 @@ export default function PlayerDashboard() {
                     </div>
                   </div>
                   
-                  {activeLobby.status !== 'in_progress' ? (
+                  {currentLobby.status !== 'in_progress' ? (
                     <div className="flex gap-3">
                       <Button 
                         className={`flex-1 h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md ${
@@ -397,7 +402,7 @@ export default function PlayerDashboard() {
                       <Button 
                         variant="destructive"
                         className="h-12 w-12 p-0 shadow-sm transition-all hover:shadow-md shrink-0"
-                        onClick={() => handleLeaveLobby(activeLobby.id)}
+                        onClick={() => handleLeaveLobby(currentLobby.id)}
                         title="Leave Lobby"
                       >
                         <LogOut className="w-5 h-5" />
