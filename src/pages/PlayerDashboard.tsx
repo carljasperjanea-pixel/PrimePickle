@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Users, Clock } from 'lucide-react';
+import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function PlayerDashboard() {
@@ -13,87 +13,55 @@ export default function PlayerDashboard() {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const isMounted = useRef(true);
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
-
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
-  const fetchLobbies = useCallback(async () => {
-    try {
-      const data = await apiRequest('/lobbies');
-      if (isMounted.current) {
-        setLobbies(data.lobbies || []);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
 
   useEffect(() => {
     useUser().then(u => {
-      if (!isMounted.current) return;
       if (!u) navigate('/login');
       else {
-      if (isMountedRef.current && user) setUser(u);
+        setUser(u);
+        fetchLobbies();
       }
     });
-  }, [navigate]);
+  }, []);
+
+  const fetchLobbies = async () => {
+    try {
+      const data = await apiRequest('/lobbies');
+      setLobbies(data.lobbies || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
     if (scanning) {
-      // Small delay to ensure DOM is ready
-      const timeoutId = setTimeout(() => {
-        if (!isMounted.current || !scanning) return;
-        
-        // Cleanup previous instance if any
-        if (scannerRef.current) {
-          try {
-            scannerRef.current.clear();
-          } catch (e) {
-            console.error("Failed to clear scanner", e);
-          }
+      const scanner = new Html5QrcodeScanner(
+        "reader",
+        { 
+          fps: 10, 
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+          showTorchButtonIfSupported: true
+        },
+        /* verbose= */ false
+      );
+      
+      scanner.render(
+        (decodedText) => {
+          scanner.clear();
+          setScanning(false);
+          handleJoinLobby(decodedText);
+        },
+        (errorMessage) => {
+          // parse error, ignore to avoid spamming logs
         }
-
-        const scanner = new Html5QrcodeScanner(
-          "reader",
-          { 
-            fps: 10, 
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
-            showTorchButtonIfSupported: true
-          },
-          /* verbose= */ false
-        );
-        
-        scannerRef.current = scanner;
-        
-        scanner.render(
-          (decodedText) => {
-            if (isMounted.current) {
-              handleJoinLobby(decodedText);
-              setScanning(false); // This will trigger cleanup via useEffect dependency change
-            }
-          },
-          (errorMessage) => {
-            // parse error, ignore
-          }
-        );
-      }, 100);
+      );
 
       return () => {
-        clearTimeout(timeoutId);
-        if (scannerRef.current) {
-          try {
-            scannerRef.current.clear().catch(e => console.error("Failed to clear scanner cleanup", e));
-          } catch (e) {
-            // ignore
-          }
-          scannerRef.current = null;
+        try {
+          scanner.clear();
+        } catch (e) {
+          // ignore cleanup errors
         }
       };
     }
@@ -102,20 +70,12 @@ export default function PlayerDashboard() {
   const handleJoinLobby = async (qrPayload: string) => {
     try {
       const res = await apiRequest('/lobbies/join', 'POST', { qr_payload: qrPayload });
-      if (isMounted.current) {
-        setScanResult(`Joined lobby successfully! ID: ${res.lobby_id}`);
-        fetchLobbies(); // Refresh lobbies
-        setTimeout(() => {
-          if (isMounted.current) setScanResult(null);
-        }, 3000);
-      }
+      setScanResult(`Joined lobby successfully! ID: ${res.lobby_id}`);
+      fetchLobbies(); // Refresh lobbies
+      setTimeout(() => setScanResult(null), 3000);
     } catch (err: any) {
-      if (isMounted.current) {
-        setError(err.message);
-        setTimeout(() => {
-          if (isMounted.current) setError('');
-        }, 5000);
-      }
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
     }
   };
 
@@ -132,103 +92,6 @@ export default function PlayerDashboard() {
   const losses = gamesPlayed - wins;
   const winRate = gamesPlayed > 0 ? ((wins / gamesPlayed) * 100).toFixed(1) : '0.0';
 
-  // Active Lobby (Open or Full or Playing)
-  const activeLobby = lobbies.find(l => l.status === 'open' || l.status === 'full' || l.status === 'playing');
-  const activeLobbyId = activeLobby?.id;
-  const activeLobbyStatus = activeLobby?.status;
-  const activeLobbyPlayers = activeLobby?.players;
-
-
-  // Redirect if playing
-  useEffect(() => {
-    if (activeLobbyStatus === 'playing' && activeLobbyId) {
-      navigate(`/scorer/${activeLobbyId}`);
-    }
-  }, [activeLobbyStatus, activeLobbyId, navigate]);
-
-  // Countdown Logic
-  const [countdown, setCountdown] = useState<number | null>(null);
-  
-  // Check if everyone is ready
-  const allReady = activeLobbyPlayers?.length >= 2 && activeLobbyPlayers.every((p: any) => p.is_ready);
-
-  useEffect(() => {
-    if (allReady) {
-      if (countdown === null) setCountdown(3);
-    } else {
-      setCountdown(null);
-    }
-  }, [allReady]);
-
-  useEffect(() => {
-    if (countdown !== null && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (countdown === 0) {
-      // Start Match
-      handleStartMatch();
-    }
-  }, [countdown]);
-
-  const handleStartMatch = async () => {
-    if (!activeLobby) return;
-    try {
-      await apiRequest(`/lobbies/${activeLobby.id}/start`, 'POST');
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleClaimCaptain = async (team: 'A' | 'B') => {
-    if (!activeLobby) return;
-    try {
-      await apiRequest(`/lobbies/${activeLobby.id}/captain`, 'POST', { team });
-      fetchLobbies();
-    } catch (e: any) {
-      alert(e.message);
-    }
-  };
-
-  const handleSetGoal = async (goal: number) => {
-    if (!activeLobby) return;
-    try {
-      await apiRequest(`/lobbies/${activeLobby.id}/settings`, 'POST', { match_goal: goal });
-      fetchLobbies();
-    } catch (e: any) {
-      console.error(e);
-    }
-  };
-
-  const handleToggleReady = async () => {
-    if (!activeLobby) return;
-    const me = activeLobby.players.find((p: any) => p.id === user.id);
-    try {
-      await apiRequest(`/lobbies/${activeLobby.id}/ready`, 'POST', { is_ready: !me?.is_ready });
-      fetchLobbies();
-    } catch (e: any) {
-      console.error(e);
-    }
-  };
-
-  const handleLeaveLobby = async () => {
-    if (!activeLobby) return;
-    if (!confirm('Are you sure you want to leave this lobby?')) return;
-    
-    try {
-      await apiRequest(`/lobbies/${activeLobby.id}/leave`, 'POST');
-      fetchLobbies();
-    } catch (e: any) {
-      console.error(e);
-      alert('Failed to leave lobby');
-    }
-  };
-
-  // Helper to check if I am captain
-  const isMyTeamCaptain = (team: 'A' | 'B') => {
-    if (!activeLobby) return false;
-    const captainId = team === 'A' ? activeLobby.team_a_captain_id : activeLobby.team_b_captain_id;
-    return captainId === user.id;
-  };
   // Recent Matches (Completed Lobbies)
   const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
 
@@ -265,14 +128,14 @@ export default function PlayerDashboard() {
               
               <div className="flex flex-col items-center mb-8">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-lime-500 to-amber-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg mb-4">
-                  {user.display_name?.slice(0, 2).toUpperCase() || '??'}
+                  {user.display_name.slice(0, 2).toUpperCase()}
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Full Name</label>
-                  <div className="font-medium text-gray-900">{user.display_name || 'Unknown'}</div>
+                  <div className="font-medium text-gray-900">{user.display_name}</div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</label>
@@ -330,171 +193,8 @@ export default function PlayerDashboard() {
             />
           </div>
 
-          {/* Active Lobby or Scan Action */}
-          {activeLobby ? (
-            <Card className="border-emerald-200 bg-emerald-50/30 shadow-md">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
-                      <Users className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">Current Lobby</h3>
-                      <p className="text-sm text-gray-600">ID: {activeLobby.id.slice(0, 8)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                      activeLobby.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {activeLobby.status}
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 px-2 text-gray-500 hover:text-red-600 hover:bg-red-50"
-                      onClick={handleLeaveLobby}
-                      title="Leave Lobby"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="text-sm font-medium text-gray-500 uppercase tracking-wider">Players ({activeLobby.players?.length || 0}/4)</div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Team A */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <div className="text-xs font-bold text-blue-600 uppercase">Team A</div>
-                        {!activeLobby.team_a_captain_id && activeLobby.players?.slice(0, 2).some((p: any) => p.id === user.id) && (
-                          <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => handleClaimCaptain('A')}>Become Captain</Button>
-                        )}
-                        {activeLobby.team_a_captain_id && <div className="text-[10px] text-blue-600 font-bold">Captain Selected</div>}
-                      </div>
-                      {activeLobby.players?.slice(0, 2).map((p: any) => (
-                        <div key={p.id} className={`flex items-center justify-between p-2 bg-white rounded border shadow-sm ${p.is_ready ? 'border-green-400 ring-1 ring-green-400' : 'border-blue-100'}`}>
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold relative">
-                              {p.display_name?.slice(0, 2).toUpperCase() || '??'}
-                              {activeLobby.team_a_captain_id === p.id && (
-                                <div className="absolute -top-1 -right-1 bg-yellow-400 rounded-full p-0.5 border border-white">
-                                  <Trophy className="w-2 h-2 text-white" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-sm font-medium">
-                              {p.display_name || 'Unknown Player'}
-                              {p.id === user.id && <span className="ml-1 text-xs text-gray-400">(You)</span>}
-                            </div>
-                          </div>
-                          {p.is_ready && <div className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">READY</div>}
-                        </div>
-                      ))}
-                      {(!activeLobby.players || activeLobby.players.length < 1) && (
-                         <div className="p-2 border border-dashed border-gray-300 rounded text-xs text-gray-400 text-center">Empty Slot</div>
-                      )}
-                      {(!activeLobby.players || activeLobby.players.length < 2) && (
-                         <div className="p-2 border border-dashed border-gray-300 rounded text-xs text-gray-400 text-center">Empty Slot</div>
-                      )}
-                    </div>
-
-                    {/* Team B */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <div className="text-xs font-bold text-orange-600 uppercase">Team B</div>
-                        {!activeLobby.team_b_captain_id && activeLobby.players?.slice(2, 4).some((p: any) => p.id === user.id) && (
-                          <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => handleClaimCaptain('B')}>Become Captain</Button>
-                        )}
-                        {activeLobby.team_b_captain_id && <div className="text-[10px] text-orange-600 font-bold">Captain Selected</div>}
-                      </div>
-                      {activeLobby.players?.slice(2, 4).map((p: any) => (
-                        <div key={p.id} className={`flex items-center justify-between p-2 bg-white rounded border shadow-sm ${p.is_ready ? 'border-green-400 ring-1 ring-green-400' : 'border-orange-100'}`}>
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold relative">
-                              {p.display_name?.slice(0, 2).toUpperCase() || '??'}
-                              {activeLobby.team_b_captain_id === p.id && (
-                                <div className="absolute -top-1 -right-1 bg-yellow-400 rounded-full p-0.5 border border-white">
-                                  <Trophy className="w-2 h-2 text-white" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-sm font-medium">
-                              {p.display_name || 'Unknown Player'}
-                              {p.id === user.id && <span className="ml-1 text-xs text-gray-400">(You)</span>}
-                            </div>
-                          </div>
-                          {p.is_ready && <div className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">READY</div>}
-                        </div>
-                      ))}
-                      {(!activeLobby.players || activeLobby.players.length < 3) && (
-                         <div className="p-2 border border-dashed border-gray-300 rounded text-xs text-gray-400 text-center">Empty Slot</div>
-                      )}
-                      {(!activeLobby.players || activeLobby.players.length < 4) && (
-                         <div className="p-2 border border-dashed border-gray-300 rounded text-xs text-gray-400 text-center">Empty Slot</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Match Settings (Captain Only) */}
-                  {(isMyTeamCaptain('A') || isMyTeamCaptain('B')) && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
-                      <div className="text-xs font-bold text-gray-500 uppercase mb-2">Match Settings (Captain)</div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">Match Point:</span>
-                        {[11, 15, 21].map(points => (
-                          <button
-                            key={points}
-                            onClick={() => handleSetGoal(points)}
-                            className={`px-3 py-1 rounded text-sm font-bold transition-colors ${
-                              (activeLobby.match_goal || 11) === points 
-                                ? 'bg-emerald-600 text-white' 
-                                : 'bg-white border text-gray-600 hover:bg-gray-100'
-                            }`}
-                          >
-                            {points}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Ready / Countdown Area */}
-                  <div className="mt-6 p-4 bg-white rounded-lg border text-center">
-                    {countdown !== null ? (
-                      <div className="flex flex-col items-center justify-center animate-pulse">
-                        <div className="text-4xl font-black text-emerald-600 mb-2">{countdown}</div>
-                        <div className="text-sm text-gray-500 font-medium">Starting Match...</div>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="flex justify-center">
-                          <Button 
-                            size="lg"
-                            onClick={handleToggleReady}
-                            className={`w-full sm:w-auto px-8 font-bold transition-all ${
-                              activeLobby.players?.find((p: any) => p.id === user.id)?.is_ready
-                                ? 'bg-red-500 hover:bg-red-600 text-white'
-                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            }`}
-                          >
-                            {activeLobby.players?.find((p: any) => p.id === user.id)?.is_ready ? 'Cancel Ready' : 'LOCK IN READY'}
-                          </Button>
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Waiting for all players to lock in...
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-emerald-200 bg-emerald-50/30 shadow-md">
+          {/* Scan Action Card */}
+          <Card className="border-emerald-200 bg-emerald-50/30 shadow-md">
             <CardContent className="p-6">
               <div className="flex items-start gap-4 mb-6">
                 <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
@@ -559,7 +259,6 @@ export default function PlayerDashboard() {
               )}
             </CardContent>
           </Card>
-          )}
 
           {/* Recent Matches */}
           <Card className="border-none shadow-md bg-white">
