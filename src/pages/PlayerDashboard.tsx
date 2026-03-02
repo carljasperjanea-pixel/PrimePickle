@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,24 +14,23 @@ export default function PlayerDashboard() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const fetchLobbies = async () => {
+  const fetchLobbies = useCallback(async () => {
     try {
       const data = await apiRequest('/lobbies');
       setLobbies(data.lobbies || []);
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
   useEffect(() => {
     useUser().then(u => {
       if (!u) navigate('/login');
       else {
         setUser(u);
-        fetchLobbies();
       }
     });
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (scanning) {
@@ -97,15 +96,7 @@ export default function PlayerDashboard() {
   const activeLobbyId = activeLobby?.id;
   const activeLobbyStatus = activeLobby?.status;
   const activeLobbyPlayers = activeLobby?.players;
-  
-  // Polling for updates
-  useEffect(() => {
-    fetchLobbies(); // Initial fetch
-    
-    // Only poll if we are in a lobby or just waiting
-    const interval = setInterval(fetchLobbies, 3000);
-    return () => clearInterval(interval);
-  }, []); // Run once on mount, keep polling
+
 
   // Redirect if playing
   useEffect(() => {
