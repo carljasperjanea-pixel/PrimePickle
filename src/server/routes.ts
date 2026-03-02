@@ -607,4 +607,47 @@ router.post('/lobbies/:id/start', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Leave Lobby
+router.post('/lobbies/:id/leave', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1. Remove player from lobby_players
+    const { error: deleteError } = await supabase
+      .from('lobby_players')
+      .delete()
+      .eq('lobby_id', id)
+      .eq('profile_id', req.user.id);
+
+    if (deleteError) throw deleteError;
+
+    // 2. Check if user was a captain and clear it
+    const { data: lobby } = await supabase
+      .from('lobbies')
+      .select('team_a_captain_id, team_b_captain_id, status')
+      .eq('id', id)
+      .single();
+
+    if (lobby) {
+      const updates: any = {};
+      if (lobby.team_a_captain_id === req.user.id) updates.team_a_captain_id = null;
+      if (lobby.team_b_captain_id === req.user.id) updates.team_b_captain_id = null;
+      
+      // 3. If lobby was full, set back to open since a player left
+      if (lobby.status === 'full') {
+        updates.status = 'open';
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('lobbies').update(updates).eq('id', id);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Leave lobby error:', error);
+    res.status(500).json({ error: 'Failed to leave lobby' });
+  }
+});
+
 export default router;

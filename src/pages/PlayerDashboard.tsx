@@ -169,6 +169,19 @@ export default function PlayerDashboard() {
     }
   };
 
+  const handleLeaveLobby = async () => {
+    if (!activeLobby) return;
+    if (!confirm('Are you sure you want to leave this lobby?')) return;
+    
+    try {
+      await apiRequest(`/lobbies/${activeLobby.id}/leave`, 'POST');
+      fetchLobbies();
+    } catch (e: any) {
+      console.error(e);
+      alert('Failed to leave lobby');
+    }
+  };
+
   // Helper to check if I am captain
   const isMyTeamCaptain = (team: 'A' | 'B') => {
     if (!activeLobby) return false;
@@ -290,10 +303,21 @@ export default function PlayerDashboard() {
                       <p className="text-sm text-gray-600">ID: {activeLobby.id.slice(0, 8)}</p>
                     </div>
                   </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                    activeLobby.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {activeLobby.status}
+                  <div className="flex items-center gap-2">
+                    <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                      activeLobby.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {activeLobby.status}
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 px-2 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                      onClick={handleLeaveLobby}
+                      title="Leave Lobby"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
 
