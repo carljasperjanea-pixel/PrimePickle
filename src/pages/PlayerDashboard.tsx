@@ -145,7 +145,14 @@ export default function PlayerDashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (currentLobby) {
+      try {
+        await apiRequest('/lobbies/leave', 'POST', { lobby_id: currentLobby.id });
+      } catch (error) {
+        console.error('Failed to leave lobby on logout', error);
+      }
+    }
     document.cookie = 'token=; Max-Age=0; path=/;';
     navigate('/login');
   };
