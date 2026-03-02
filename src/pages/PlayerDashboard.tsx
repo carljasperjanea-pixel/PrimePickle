@@ -14,6 +14,15 @@ export default function PlayerDashboard() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  const fetchLobbies = async () => {
+    try {
+      const data = await apiRequest('/lobbies');
+      setLobbies(data.lobbies || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     useUser().then(u => {
       if (!u) navigate('/login');
