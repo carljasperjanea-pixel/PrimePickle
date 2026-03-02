@@ -30,7 +30,7 @@ export default function PlayerDashboard() {
     const interval = setInterval(() => {
       fetchLobbies();
       fetchActiveLobby();
-    }, 2000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, []);
@@ -126,8 +126,14 @@ export default function PlayerDashboard() {
       if (!currentUser) return;
       
       const newStatus = !currentUser.is_ready;
-      await apiRequest('/lobbies/ready', 'POST', { lobby_id: activeLobby.id, is_ready: newStatus });
+      const res = await apiRequest('/lobbies/ready', 'POST', { lobby_id: activeLobby.id, is_ready: newStatus });
+      
       fetchActiveLobby();
+      fetchLobbies(); // Update lobby status immediately
+      
+      if (res.game_started) {
+        // Game started logic if needed
+      }
     } catch (err: any) {
       setError(err.message);
       setTimeout(() => setError(''), 3000);
