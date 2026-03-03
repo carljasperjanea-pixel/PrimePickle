@@ -58,6 +58,22 @@ async function checkDb() {
     // Cleanup
     await supabase.from('profiles').delete().eq('id', dummyId);
   }
+  // Check for 'started_at' column in 'lobbies'
+  console.log('Checking schema for "lobbies.started_at"...');
+  const { error: columnError } = await supabase
+    .from('lobbies')
+    .select('started_at')
+    .limit(1);
+
+  if (columnError) {
+    console.error('Error checking "lobbies.started_at":', columnError);
+    if (columnError.code === '42703') { // Undefined column
+      console.error('--> CONCLUSION: The "started_at" column is missing from the "lobbies" table.');
+      console.error('--> ACTION: Run "src/server/fix_schema_missing_columns.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "lobbies.started_at" column exists.');
+  }
 }
 
 checkDb();
