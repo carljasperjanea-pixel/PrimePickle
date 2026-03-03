@@ -131,6 +131,21 @@ export default function PlayerDashboard() {
     }
   };
 
+  const handleStartGame = async () => {
+    if (!currentLobby?.id) return;
+    try {
+      await apiRequest('/lobbies/start', 'POST', { lobby_id: currentLobby.id });
+      // The polling will pick up the status change to 'in_progress'
+      // which will then trigger the countdown visual if we keep it.
+      fetchActiveLobby();
+      fetchLobbies();
+    } catch (err: any) {
+      console.error("Start game error:", err);
+      setError(err.message);
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
   const handleReadyToggle = async () => {
     if (!currentLobby?.id || !user?.id) {
       console.error("Missing lobby or user data when toggling ready");
@@ -141,14 +156,11 @@ export default function PlayerDashboard() {
       if (!currentUser) return;
       
       const newStatus = !currentUser.is_ready;
-      const res = await apiRequest('/lobbies/ready', 'POST', { lobby_id: currentLobby.id, is_ready: newStatus });
+      await apiRequest('/lobbies/ready', 'POST', { lobby_id: currentLobby.id, is_ready: newStatus });
       
       fetchActiveLobby();
       fetchLobbies(); // Update lobby status immediately
       
-      if (res.game_started) {
-        // Game started logic if needed
-      }
     } catch (err: any) {
       console.error("Ready toggle error:", err);
       setError(err.message);
@@ -406,26 +418,38 @@ export default function PlayerDashboard() {
                   </div>
                   
                   {currentLobby.status !== 'in_progress' ? (
-                    <div className="flex gap-3">
-                      <Button 
-                        className={`flex-1 h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md ${
-                          activeLobbyPlayers.find(p => p.id === user.id)?.is_ready 
-                            ? 'bg-amber-500 hover:bg-amber-600 text-white' 
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                        }`}
-                        onClick={handleReadyToggle}
-                      >
-                        {activeLobbyPlayers.find(p => p.id === user.id)?.is_ready ? 'Not Ready' : 'Ready Up!'}
-                      </Button>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex gap-3">
+                        <Button 
+                          className={`flex-1 h-12 text-lg font-medium shadow-sm transition-all hover:shadow-md ${
+                            activeLobbyPlayers.find(p => p.id === user.id)?.is_ready 
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white' 
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          }`}
+                          onClick={handleReadyToggle}
+                        >
+                          {activeLobbyPlayers.find(p => p.id === user.id)?.is_ready ? 'Not Ready' : 'Ready Up!'}
+                        </Button>
 
-                      <Button 
-                        variant="destructive"
-                        className="h-12 w-12 p-0 shadow-sm transition-all hover:shadow-md shrink-0"
-                        onClick={() => handleLeaveLobby(currentLobby.id)}
-                        title="Leave Lobby"
-                      >
-                        <LogOut className="w-5 h-5" />
-                      </Button>
+                        <Button 
+                          variant="destructive"
+                          className="h-12 w-12 p-0 shadow-sm transition-all hover:shadow-md shrink-0"
+                          onClick={() => handleLeaveLobby(currentLobby.id)}
+                          title="Leave Lobby"
+                        >
+                          <LogOut className="w-5 h-5" />
+                        </Button>
+                      </div>
+                      
+                      {/* Start Game Button - Only visible when all 4 players are ready */}
+                      {activeLobbyPlayers.length === 4 && activeLobbyPlayers.every(p => p.is_ready) && (
+                        <Button 
+                          className="w-full h-12 text-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md animate-in fade-in slide-in-from-bottom-2"
+                          onClick={handleStartGame}
+                        >
+                          Start Game
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="mt-4 p-4 bg-gray-100 rounded-lg text-center text-gray-600 font-medium animate-pulse">

@@ -373,27 +373,9 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
           if (readyError) throw readyError;
     
           if ((totalPlayers || 0) === 4 && (readyPlayers || 0) === 4) {
-            console.log('[DEBUG] All players ready. Attempting to start game...');
-            
-            // Start Game
-            // Note: This requires Service Role Key if RLS is enabled and user is not admin
-            const { error: startError } = await supabase
-              .from('lobbies')
-              .update({ status: 'in_progress', started_at: new Date().toISOString() })
-              .eq('id', lobby_id);
-            
-            if (startError) {
-                console.error('[DEBUG] Failed to start game:', startError);
-                // We don't throw here to avoid rolling back the "Ready" status (although we can't rollback anyway without transactions)
-                // But we should inform the client.
-                return res.status(500).json({ 
-                    error: 'Failed to start game', 
-                    details: startError.message,
-                    hint: 'Ensure server is using Service Role Key'
-                });
-            }
-            
-            return res.json({ message: 'Game starting!', game_started: true });
+             // We no longer auto-start. Just return success.
+             // The frontend will see everyone is ready and show the Start Game button.
+             return res.json({ message: 'Ready status updated. Waiting for start.', all_ready: true });
           }
         }
     
@@ -402,6 +384,72 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
         console.error('Toggle ready error:', error);
         res.status(500).json({ 
             error: 'Failed to update ready status',
+            details: error.message || error.toString()
+        });
+      }
+    });
+
+    // Start Game (Manual Trigger)
+    router.post('/lobbies/start', authenticateToken, async (req: any, res) => {
+      const { lobby_id } = req.body;
+      console.log(`[DEBUG] /lobbies/start called. User: ${req.user.id}, Lobby: ${lobby_id}`);
+
+      try {
+        // Check if user is in this lobby
+        const { data: membership, error: memError } = await supabase
+          .from('lobby_players')
+          .select('*')
+          .eq('lobby_id', lobby_id)
+          .eq('profile_id', req.user.id)
+          .single();
+
+        if (memError || !membership) {
+          return res.status(400).json({ error: 'You are not in this lobby' });
+        }
+
+        // Verify all players are ready and lobby is full
+        const { count: totalPlayers, error: totalError } = await supabase
+          .from('lobby_players')
+          .select('*', { count: 'exact', head: true })
+          .eq('lobby_id', lobby_id);
+        
+        if (totalError) throw totalError;
+
+        const { count: readyPlayers, error: readyError } = await supabase
+          .from('lobby_players')
+          .select('*', { count: 'exact', head: true })
+          .eq('lobby_id', lobby_id)
+          .eq('is_ready', true);
+
+        if (readyError) throw readyError;
+
+        if ((totalPlayers || 0) !== 4 || (readyPlayers || 0) !== 4) {
+          return res.status(400).json({ error: 'Not all players are ready or lobby is not full.' });
+        }
+
+        console.log('[DEBUG] Manual start triggered. Starting game...');
+        
+        // Start Game
+        const { error: startError } = await supabase
+          .from('lobbies')
+          .update({ status: 'in_progress', started_at: new Date().toISOString() })
+          .eq('id', lobby_id);
+        
+        if (startError) {
+            console.error('[DEBUG] Failed to start game:', startError);
+            return res.status(500).json({ 
+                error: 'Failed to start game', 
+                details: startError.message,
+                hint: 'Ensure server is using Service Role Key'
+            });
+        }
+        
+        return res.json({ message: 'Game started!', game_started: true });
+
+      } catch (error: any) {
+        console.error('Start game error:', error);
+        res.status(500).json({ 
+            error: 'Failed to start game',
             details: error.message || error.toString()
         });
       }
