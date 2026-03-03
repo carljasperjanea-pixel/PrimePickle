@@ -8,33 +8,14 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
 
 // Middleware to verify JWT
-const authenticateToken = async (req: any, res: any, next: any) => {
+const authenticateToken = (req: any, res: any, next: any) => {
   const token = req.cookies.token;
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, JWT_SECRET, async (err: any, decoded: any) => {
+  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
     if (err) return res.sendStatus(403);
-    
-    // Verify user exists in DB (prevents stale tokens after DB reset)
-    try {
-      const { data: user, error } = await supabase
-        .from('profiles')
-        .select('id, email, role')
-        .eq('id', decoded.id)
-        .single();
-
-      if (error || !user) {
-        console.warn(`[AUTH] Token valid but user ${decoded.id} not found in DB. Clearing cookie.`);
-        res.clearCookie('token');
-        return res.sendStatus(401);
-      }
-
-      req.user = user;
-      next();
-    } catch (dbError) {
-      console.error('[AUTH] DB check failed:', dbError);
-      res.sendStatus(500);
-    }
+    req.user = user;
+    next();
   });
 };
 
@@ -94,11 +75,7 @@ router.post('/auth/signup', async (req, res) => {
         return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
       }
       if (error.code === '42501') { // RLS violation
-        return res.status(500).json({ 
-          error: 'Permission denied (RLS).',
-          details: 'The server is using an ANON KEY but the database requires a SERVICE ROLE KEY.',
-          hint: 'Please run the SQL in "src/server/fix-permissions.sql" in your Supabase SQL Editor to allow anonymous access.'
-        });
+        return res.status(500).json({ error: 'Permission denied (RLS). Ensure you are using the SERVICE ROLE KEY.' });
       }
       
       throw error;
@@ -107,12 +84,7 @@ router.post('/auth/signup', async (req, res) => {
     console.log('User created successfully:', id);
 
     const token = jwt.sign({ id, email, role: role || 'player' }, JWT_SECRET);
-    res.cookie('token', token, { 
-      httpOnly: true, 
-      secure: true, 
-      sameSite: 'none',
-      maxAge: 24 * 60 * 60 * 1000 // 1 day
-    });
+    res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
     res.json({ user: { id, email, display_name, role: role || 'player' } });
   } catch (error: any) {
     console.error('Signup Exception:', error);
@@ -167,12 +139,7 @@ router.post('/auth/login', async (req, res) => {
     }
     
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
-    res.cookie('token', token, { 
-      httpOnly: true, 
-      secure: true, 
-      sameSite: 'none',
-      maxAge: 24 * 60 * 60 * 1000 // 1 day
-    });
+    res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
     
     // Remove password hash from response
     const { password_hash, ...userWithoutPassword } = user;
@@ -508,7 +475,6 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
 
     if (memError || !membership) {
       console.error(`[DEBUG] Membership check failed. Error: ${JSON.stringify(memError)}, Membership: ${JSON.stringify(membership)}`);
-      console.error(`[DEBUG] Context - Lobby: ${lobby_id}, User: ${req.user.id}`);
       return res.status(400).json({ error: 'You are not in this lobby' });
     }
 
@@ -545,25 +511,21 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Join Lobby via QR Scan or Lobby ID
+// Join Lobby via QR Scan
 router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
   const { qr_payload } = req.body;
-  console.log(`[DEBUG] Join request. User: ${req.user.id}, Payload: ${qr_payload}`);
   
   try {
-    // Find lobby by QR payload OR ID
+    // Find lobby by QR payload
     const { data: lobby, error: lobbyError } = await supabase
       .from('lobbies')
       .select('*')
-      .or(`qr_payload.eq.${qr_payload},id.eq.${qr_payload}`)
+      .eq('qr_payload', qr_payload)
       .single();
     
     if (lobbyError || !lobby) {
-      console.warn(`[DEBUG] Lobby not found for payload: ${qr_payload}`);
-      return res.status(400).json({ error: 'Invalid QR Code or Lobby ID: Lobby not found' });
+      return res.status(404).json({ error: 'Invalid QR Code' });
     }
-
-    console.log(`[DEBUG] Found lobby: ${lobby.id}, Status: ${lobby.status}`);
 
     // Check if player is already in ANY active lobby (status != completed)
     const { data: activeLobbies } = await supabase
@@ -612,10 +574,7 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
       .from('lobby_players')
       .insert([{ lobby_id: lobby.id, profile_id: req.user.id, team }]);
 
-    if (joinError) {
-      console.error('[DEBUG] Join insert error:', joinError);
-      throw joinError;
-    }
+    if (joinError) throw joinError;
     
     // If full (4 players), update status
     if ((count || 0) + 1 === 4) {
@@ -626,9 +585,9 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
     }
     
     res.json({ message: 'Joined successfully', lobby_id: lobby.id });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Join lobby error:', error);
-    res.status(500).json({ error: error.message || 'Failed to join lobby' });
+    res.status(500).json({ error: 'Failed to join lobby' });
   }
 });
 
@@ -717,12 +676,13 @@ router.get('/lobbies/:id', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Complete Match (Any player in the lobby can trigger this)
+// Complete Match (Admin only)
 router.post('/matches/complete', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin') return res.sendStatus(403);
+  
   const { lobby_id, winner_team, score } = req.body; // winner_team: 'A' or 'B'
   
   try {
-    // 1. Verify Lobby exists and is in progress
     const { data: lobby, error: lobbyError } = await supabase
       .from('lobbies')
       .select('*')
@@ -732,28 +692,16 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
     if (lobbyError || !lobby) return res.status(404).json({ error: 'Lobby not found' });
     if (lobby.status === 'completed') return res.status(400).json({ error: 'Match already completed' });
     
-    // 2. Verify User is in this lobby
-    const { data: membership, error: memError } = await supabase
-      .from('lobby_players')
-      .select('*')
-      .eq('lobby_id', lobby_id)
-      .eq('profile_id', req.user.id)
-      .single();
-
-    if (memError || !membership) {
-      return res.status(403).json({ error: 'You are not a participant in this match' });
-    }
-
-    // 3. Get players joined in order
+    // Get players joined in order
     const { data: lobbyPlayers, error: lpError } = await supabase
       .from('lobby_players')
-      .select('profile_id, joined_at, team')
+      .select('profile_id, joined_at')
       .eq('lobby_id', lobby_id)
       .order('joined_at', { ascending: true });
 
     if (lpError) throw lpError;
 
-    // 4. Get full profiles for MMR calculation
+    // Get full profiles for MMR calculation
     const { data: players, error: pError } = await supabase
       .from('profiles')
       .select('id, mmr, games_played')
@@ -761,16 +709,15 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
 
     if (pError) throw pError;
 
-    // Map profiles to lobby players to get teams correct
-    const teamA_Profiles = lobbyPlayers
-      .filter((lp: any) => lp.team === 'A')
-      .map((lp: any) => players.find((p: any) => p.id === lp.profile_id))
-      .filter(Boolean);
+    // Map back to ordered list
+    const orderedPlayers = lobbyPlayers?.map((lp: any) => players?.find((p: any) => p.id === lp.profile_id)).filter(Boolean) || [];
+    
+    if (orderedPlayers.length < 2) { 
+       // proceed for testing
+    }
 
-    const teamB_Profiles = lobbyPlayers
-      .filter((lp: any) => lp.team === 'B')
-      .map((lp: any) => players.find((p: any) => p.id === lp.profile_id))
-      .filter(Boolean);
+    const teamA = orderedPlayers.slice(0, 2);
+    const teamB = orderedPlayers.slice(2, 4);
     
     const mmrDeltaWin = 20;
     const mmrDeltaLoss = 15;
@@ -778,17 +725,17 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
     // Prepare updates
     const updates = [];
 
-    // Team A Updates
-    for (const p of teamA_Profiles) {
+    // Team A
+    for (const p of teamA) {
       const isWinner = winner_team === 'A';
-      const newMMR = isWinner ? (p.mmr || 1000) + mmrDeltaWin : Math.max(0, (p.mmr || 1000) - mmrDeltaLoss);
+      const newMMR = isWinner ? (p.mmr || 1000) + mmrDeltaWin : (p.mmr || 1000) - mmrDeltaLoss;
       updates.push(supabase.from('profiles').update({ mmr: newMMR, games_played: (p.games_played || 0) + 1 }).eq('id', p.id));
     }
 
-    // Team B Updates
-    for (const p of teamB_Profiles) {
+    // Team B
+    for (const p of teamB) {
       const isWinner = winner_team === 'B';
-      const newMMR = isWinner ? (p.mmr || 1000) + mmrDeltaWin : Math.max(0, (p.mmr || 1000) - mmrDeltaLoss);
+      const newMMR = isWinner ? (p.mmr || 1000) + mmrDeltaWin : (p.mmr || 1000) - mmrDeltaLoss;
       updates.push(supabase.from('profiles').update({ mmr: newMMR, games_played: (p.games_played || 0) + 1 }).eq('id', p.id));
     }
 
