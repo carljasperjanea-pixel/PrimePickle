@@ -84,7 +84,12 @@ router.post('/auth/signup', async (req, res) => {
     console.log('User created successfully:', id);
 
     const token = jwt.sign({ id, email, role: role || 'player' }, JWT_SECRET);
-    res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    res.cookie('token', token, { 
+      httpOnly: true, 
+      secure: true, 
+      sameSite: 'none',
+      maxAge: 24 * 60 * 60 * 1000 // 1 day
+    });
     res.json({ user: { id, email, display_name, role: role || 'player' } });
   } catch (error: any) {
     console.error('Signup Exception:', error);
@@ -139,7 +144,12 @@ router.post('/auth/login', async (req, res) => {
     }
     
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
-    res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    res.cookie('token', token, { 
+      httpOnly: true, 
+      secure: true, 
+      sameSite: 'none',
+      maxAge: 24 * 60 * 60 * 1000 // 1 day
+    });
     
     // Remove password hash from response
     const { password_hash, ...userWithoutPassword } = user;
