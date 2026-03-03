@@ -75,7 +75,11 @@ router.post('/auth/signup', async (req, res) => {
         return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
       }
       if (error.code === '42501') { // RLS violation
-        return res.status(500).json({ error: 'Permission denied (RLS). Ensure you are using the SERVICE ROLE KEY.' });
+        return res.status(500).json({ 
+          error: 'Permission denied (RLS).',
+          details: 'The server is using an ANON KEY but the database requires a SERVICE ROLE KEY.',
+          hint: 'Please run the SQL in "src/server/fix-permissions.sql" in your Supabase SQL Editor to allow anonymous access.'
+        });
       }
       
       throw error;
