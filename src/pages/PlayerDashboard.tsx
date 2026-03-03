@@ -5,6 +5,7 @@ import { apiRequest, useUser } from '@/lib/api';
 import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import GameScorer from '@/components/GameScorer';
 
 export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -192,6 +193,20 @@ export default function PlayerDashboard() {
   // Recent Matches (Completed Lobbies)
   const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
   
+  // Render Game Scorer if match is in progress
+  if (currentLobby?.status === 'in_progress' && countdown === null) {
+    return (
+      <GameScorer 
+        lobby={currentLobby} 
+        players={activeLobbyPlayers} 
+        onGameEnd={() => {
+          fetchActiveLobby();
+          fetchLobbies();
+        }} 
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* Header */}
