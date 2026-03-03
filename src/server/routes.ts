@@ -327,6 +327,7 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
 // Toggle Ready Status
 router.post('/lobbies/ready', authenticateToken, async (req: any, res) => {
   const { lobby_id, is_ready } = req.body;
+  console.log(`[DEBUG] /lobbies/ready called. User: ${req.user.id}, Lobby: ${lobby_id}, Ready: ${is_ready}`);
 
   try {
     // Check if user is in this lobby
@@ -338,6 +339,7 @@ router.post('/lobbies/ready', authenticateToken, async (req: any, res) => {
       .single();
 
     if (memError || !membership) {
+      console.error(`[DEBUG] Membership check failed. Error: ${JSON.stringify(memError)}, Membership: ${JSON.stringify(membership)}`);
       return res.status(400).json({ error: 'You are not in this lobby' });
     }
 
@@ -390,6 +392,7 @@ router.post('/lobbies/ready', authenticateToken, async (req: any, res) => {
 // Switch Team
 router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
   const { lobby_id, team } = req.body;
+  console.log(`[DEBUG] /lobbies/team called. User: ${req.user.id}, Lobby: ${lobby_id}, Team: ${team}`);
 
   if (!['A', 'B'].includes(team)) {
     return res.status(400).json({ error: 'Invalid team selection' });
@@ -405,6 +408,7 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
       .single();
 
     if (memError || !membership) {
+      console.error(`[DEBUG] Membership check failed. Error: ${JSON.stringify(memError)}, Membership: ${JSON.stringify(membership)}`);
       return res.status(400).json({ error: 'You are not in this lobby' });
     }
 

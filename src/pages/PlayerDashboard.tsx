@@ -116,16 +116,26 @@ export default function PlayerDashboard() {
   };
 
   const handleSwitchTeam = async (team: string) => {
+    if (!currentLobby?.id) {
+      console.error("No active lobby found when switching team");
+      return;
+    }
     try {
       await apiRequest('/lobbies/team', 'POST', { lobby_id: currentLobby.id, team });
       fetchActiveLobby();
     } catch (err: any) {
+      console.error("Switch team error:", err);
       setError(err.message);
+      fetchActiveLobby(); // Sync state in case of error (e.g. kicked)
       setTimeout(() => setError(''), 3000);
     }
   };
 
   const handleReadyToggle = async () => {
+    if (!currentLobby?.id || !user?.id) {
+      console.error("Missing lobby or user data when toggling ready");
+      return;
+    }
     try {
       const currentUser = activeLobbyPlayers.find(p => p.id === user.id);
       if (!currentUser) return;
@@ -140,7 +150,9 @@ export default function PlayerDashboard() {
         // Game started logic if needed
       }
     } catch (err: any) {
+      console.error("Ready toggle error:", err);
       setError(err.message);
+      fetchActiveLobby(); // Sync state in case of error
       setTimeout(() => setError(''), 3000);
     }
   };
