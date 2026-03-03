@@ -686,13 +686,12 @@ router.get('/lobbies/:id', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Complete Match (Admin only)
+// Complete Match (Any player in the lobby can trigger this)
 router.post('/matches/complete', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.sendStatus(403);
-  
   const { lobby_id, winner_team, score } = req.body; // winner_team: 'A' or 'B'
   
   try {
+    // 1. Verify Lobby exists and is in progress
     const { data: lobby, error: lobbyError } = await supabase
       .from('lobbies')
       .select('*')
@@ -702,16 +701,28 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
     if (lobbyError || !lobby) return res.status(404).json({ error: 'Lobby not found' });
     if (lobby.status === 'completed') return res.status(400).json({ error: 'Match already completed' });
     
-    // Get players joined in order
+    // 2. Verify User is in this lobby
+    const { data: membership, error: memError } = await supabase
+      .from('lobby_players')
+      .select('*')
+      .eq('lobby_id', lobby_id)
+      .eq('profile_id', req.user.id)
+      .single();
+
+    if (memError || !membership) {
+      return res.status(403).json({ error: 'You are not a participant in this match' });
+    }
+
+    // 3. Get players joined in order
     const { data: lobbyPlayers, error: lpError } = await supabase
       .from('lobby_players')
-      .select('profile_id, joined_at')
+      .select('profile_id, joined_at, team')
       .eq('lobby_id', lobby_id)
       .order('joined_at', { ascending: true });
 
     if (lpError) throw lpError;
 
-    // Get full profiles for MMR calculation
+    // 4. Get full profiles for MMR calculation
     const { data: players, error: pError } = await supabase
       .from('profiles')
       .select('id, mmr, games_played')
@@ -719,15 +730,16 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
 
     if (pError) throw pError;
 
-    // Map back to ordered list
-    const orderedPlayers = lobbyPlayers?.map((lp: any) => players?.find((p: any) => p.id === lp.profile_id)).filter(Boolean) || [];
-    
-    if (orderedPlayers.length < 2) { 
-       // proceed for testing
-    }
+    // Map profiles to lobby players to get teams correct
+    const teamA_Profiles = lobbyPlayers
+      .filter((lp: any) => lp.team === 'A')
+      .map((lp: any) => players.find((p: any) => p.id === lp.profile_id))
+      .filter(Boolean);
 
-    const teamA = orderedPlayers.slice(0, 2);
-    const teamB = orderedPlayers.slice(2, 4);
+    const teamB_Profiles = lobbyPlayers
+      .filter((lp: any) => lp.team === 'B')
+      .map((lp: any) => players.find((p: any) => p.id === lp.profile_id))
+      .filter(Boolean);
     
     const mmrDeltaWin = 20;
     const mmrDeltaLoss = 15;
@@ -735,17 +747,17 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
     // Prepare updates
     const updates = [];
 
-    // Team A
-    for (const p of teamA) {
+    // Team A Updates
+    for (const p of teamA_Profiles) {
       const isWinner = winner_team === 'A';
-      const newMMR = isWinner ? (p.mmr || 1000) + mmrDeltaWin : (p.mmr || 1000) - mmrDeltaLoss;
+      const newMMR = isWinner ? (p.mmr || 1000) + mmrDeltaWin : Math.max(0, (p.mmr || 1000) - mmrDeltaLoss);
       updates.push(supabase.from('profiles').update({ mmr: newMMR, games_played: (p.games_played || 0) + 1 }).eq('id', p.id));
     }
 
-    // Team B
-    for (const p of teamB) {
+    // Team B Updates
+    for (const p of teamB_Profiles) {
       const isWinner = winner_team === 'B';
-      const newMMR = isWinner ? (p.mmr || 1000) + mmrDeltaWin : (p.mmr || 1000) - mmrDeltaLoss;
+      const newMMR = isWinner ? (p.mmr || 1000) + mmrDeltaWin : Math.max(0, (p.mmr || 1000) - mmrDeltaLoss);
       updates.push(supabase.from('profiles').update({ mmr: newMMR, games_played: (p.games_played || 0) + 1 }).eq('id', p.id));
     }
 
