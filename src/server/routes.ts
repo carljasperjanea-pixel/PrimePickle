@@ -8,14 +8,33 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
 
 // Middleware to verify JWT
-const authenticateToken = (req: any, res: any, next: any) => {
+const authenticateToken = async (req: any, res: any, next: any) => {
   const token = req.cookies.token;
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+  jwt.verify(token, JWT_SECRET, async (err: any, decoded: any) => {
     if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
+    
+    // Verify user exists in DB (prevents stale tokens after DB reset)
+    try {
+      const { data: user, error } = await supabase
+        .from('profiles')
+        .select('id, email, role')
+        .eq('id', decoded.id)
+        .single();
+
+      if (error || !user) {
+        console.warn(`[AUTH] Token valid but user ${decoded.id} not found in DB. Clearing cookie.`);
+        res.clearCookie('token');
+        return res.sendStatus(401);
+      }
+
+      req.user = user;
+      next();
+    } catch (dbError) {
+      console.error('[AUTH] DB check failed:', dbError);
+      res.sendStatus(500);
+    }
   });
 };
 
@@ -538,7 +557,7 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
       .single();
     
     if (lobbyError || !lobby) {
-      return res.status(404).json({ error: 'Invalid QR Code' });
+      return res.status(400).json({ error: 'Invalid QR Code: Lobby not found' });
     }
 
     // Check if player is already in ANY active lobby (status != completed)
