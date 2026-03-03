@@ -324,70 +324,88 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Toggle Ready Status
-router.post('/lobbies/ready', authenticateToken, async (req: any, res) => {
-  const { lobby_id, is_ready } = req.body;
-  console.log(`[DEBUG] /lobbies/ready called. User: ${req.user.id}, Lobby: ${lobby_id}, Ready: ${is_ready}`);
-
-  try {
-    // Check if user is in this lobby
-    const { data: membership, error: memError } = await supabase
-      .from('lobby_players')
-      .select('is_ready')
-      .eq('lobby_id', lobby_id)
-      .eq('profile_id', req.user.id)
-      .single();
-
-    if (memError || !membership) {
-      console.error(`[DEBUG] Membership check failed. Error: ${JSON.stringify(memError)}, Membership: ${JSON.stringify(membership)}`);
-      return res.status(400).json({ error: 'You are not in this lobby' });
-    }
-
-    // Update ready status
-    const { error: updateError } = await supabase
-      .from('lobby_players')
-      .update({ is_ready })
-      .eq('lobby_id', lobby_id)
-      .eq('profile_id', req.user.id);
-
-    if (updateError) throw updateError;
-
-    // Check if all players are ready and lobby is full
-    if (is_ready) {
-      const { count: totalPlayers, error: totalError } = await supabase
-        .from('lobby_players')
-        .select('*', { count: 'exact', head: true })
-        .eq('lobby_id', lobby_id);
-      
-      if (totalError) throw totalError;
-
-      const { count: readyPlayers, error: readyError } = await supabase
-        .from('lobby_players')
-        .select('*', { count: 'exact', head: true })
-        .eq('lobby_id', lobby_id)
-        .eq('is_ready', true);
-
-      if (readyError) throw readyError;
-
-      if ((totalPlayers || 0) === 4 && (readyPlayers || 0) === 4) {
-        // Start Game
-        const { error: startError } = await supabase
-          .from('lobbies')
-          .update({ status: 'in_progress', started_at: new Date().toISOString() })
-          .eq('id', lobby_id);
-        
-        if (startError) throw startError;
-        
-        return res.json({ message: 'Game starting!', game_started: true });
+    // Toggle Ready Status
+    router.post('/lobbies/ready', authenticateToken, async (req: any, res) => {
+      const { lobby_id, is_ready } = req.body;
+      console.log(`[DEBUG] /lobbies/ready called. User: ${req.user.id}, Lobby: ${lobby_id}, Ready: ${is_ready}`);
+    
+      try {
+        // Check if user is in this lobby
+        const { data: membership, error: memError } = await supabase
+          .from('lobby_players')
+          .select('is_ready')
+          .eq('lobby_id', lobby_id)
+          .eq('profile_id', req.user.id)
+          .single();
+    
+        if (memError || !membership) {
+          console.error(`[DEBUG] Membership check failed. Error: ${JSON.stringify(memError)}, Membership: ${JSON.stringify(membership)}`);
+          return res.status(400).json({ error: 'You are not in this lobby' });
+        }
+    
+        // Update ready status
+        const { error: updateError } = await supabase
+          .from('lobby_players')
+          .update({ is_ready })
+          .eq('lobby_id', lobby_id)
+          .eq('profile_id', req.user.id);
+    
+        if (updateError) {
+            console.error('[DEBUG] Failed to update ready status:', updateError);
+            throw updateError;
+        }
+    
+        // Check if all players are ready and lobby is full
+        if (is_ready) {
+          const { count: totalPlayers, error: totalError } = await supabase
+            .from('lobby_players')
+            .select('*', { count: 'exact', head: true })
+            .eq('lobby_id', lobby_id);
+          
+          if (totalError) throw totalError;
+    
+          const { count: readyPlayers, error: readyError } = await supabase
+            .from('lobby_players')
+            .select('*', { count: 'exact', head: true })
+            .eq('lobby_id', lobby_id)
+            .eq('is_ready', true);
+    
+          if (readyError) throw readyError;
+    
+          if ((totalPlayers || 0) === 4 && (readyPlayers || 0) === 4) {
+            console.log('[DEBUG] All players ready. Attempting to start game...');
+            
+            // Start Game
+            // Note: This requires Service Role Key if RLS is enabled and user is not admin
+            const { error: startError } = await supabase
+              .from('lobbies')
+              .update({ status: 'in_progress', started_at: new Date().toISOString() })
+              .eq('id', lobby_id);
+            
+            if (startError) {
+                console.error('[DEBUG] Failed to start game:', startError);
+                // We don't throw here to avoid rolling back the "Ready" status (although we can't rollback anyway without transactions)
+                // But we should inform the client.
+                return res.status(500).json({ 
+                    error: 'Failed to start game', 
+                    details: startError.message,
+                    hint: 'Ensure server is using Service Role Key'
+                });
+            }
+            
+            return res.json({ message: 'Game starting!', game_started: true });
+          }
+        }
+    
+        res.json({ message: `Ready status updated to ${is_ready}` });
+      } catch (error: any) {
+        console.error('Toggle ready error:', error);
+        res.status(500).json({ 
+            error: 'Failed to update ready status',
+            details: error.message || error.toString()
+        });
       }
-    }
-
-    res.json({ message: `Ready status updated to ${is_ready}` });
-  } catch (error: any) {
-    console.error('Toggle ready error:', error);
-    res.status(500).json({ error: 'Failed to update ready status' });
-  }
-});
+    });
 
 // Switch Team
 router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
