@@ -508,6 +508,7 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
 
     if (memError || !membership) {
       console.error(`[DEBUG] Membership check failed. Error: ${JSON.stringify(memError)}, Membership: ${JSON.stringify(membership)}`);
+      console.error(`[DEBUG] Context - Lobby: ${lobby_id}, User: ${req.user.id}`);
       return res.status(400).json({ error: 'You are not in this lobby' });
     }
 
@@ -544,21 +545,25 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Join Lobby via QR Scan
+// Join Lobby via QR Scan or Lobby ID
 router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
   const { qr_payload } = req.body;
+  console.log(`[DEBUG] Join request. User: ${req.user.id}, Payload: ${qr_payload}`);
   
   try {
-    // Find lobby by QR payload
+    // Find lobby by QR payload OR ID
     const { data: lobby, error: lobbyError } = await supabase
       .from('lobbies')
       .select('*')
-      .eq('qr_payload', qr_payload)
+      .or(`qr_payload.eq.${qr_payload},id.eq.${qr_payload}`)
       .single();
     
     if (lobbyError || !lobby) {
-      return res.status(400).json({ error: 'Invalid QR Code: Lobby not found' });
+      console.warn(`[DEBUG] Lobby not found for payload: ${qr_payload}`);
+      return res.status(400).json({ error: 'Invalid QR Code or Lobby ID: Lobby not found' });
     }
+
+    console.log(`[DEBUG] Found lobby: ${lobby.id}, Status: ${lobby.status}`);
 
     // Check if player is already in ANY active lobby (status != completed)
     const { data: activeLobbies } = await supabase
@@ -607,7 +612,10 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
       .from('lobby_players')
       .insert([{ lobby_id: lobby.id, profile_id: req.user.id, team }]);
 
-    if (joinError) throw joinError;
+    if (joinError) {
+      console.error('[DEBUG] Join insert error:', joinError);
+      throw joinError;
+    }
     
     // If full (4 players), update status
     if ((count || 0) + 1 === 4) {
@@ -618,9 +626,9 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
     }
     
     res.json({ message: 'Joined successfully', lobby_id: lobby.id });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Join lobby error:', error);
-    res.status(500).json({ error: 'Failed to join lobby' });
+    res.status(500).json({ error: error.message || 'Failed to join lobby' });
   }
 });
 
