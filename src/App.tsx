@@ -9,6 +9,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import PlayerDashboard from './pages/PlayerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import Scorer from './pages/Scorer';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<PlayerDashboard />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/scorer/:lobbyId" element={<Scorer />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
