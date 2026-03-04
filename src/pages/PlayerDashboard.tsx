@@ -5,7 +5,7 @@ import { apiRequest, useUser } from '@/lib/api';
 import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import GameScorer from '@/components/GameScorer';
+import Scorer from './Scorer';
 
 export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -193,20 +193,6 @@ export default function PlayerDashboard() {
   // Recent Matches (Completed Lobbies)
   const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
   
-  // Render Game Scorer if match is in progress
-  if (currentLobby?.status === 'in_progress' && countdown === null) {
-    return (
-      <GameScorer 
-        lobby={currentLobby} 
-        players={activeLobbyPlayers} 
-        onGameEnd={() => {
-          fetchActiveLobby();
-          fetchLobbies();
-        }} 
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* Header */}
@@ -467,8 +453,14 @@ export default function PlayerDashboard() {
                       )}
                     </div>
                   ) : (
-                    <div className="mt-4 p-4 bg-gray-100 rounded-lg text-center text-gray-600 font-medium animate-pulse">
-                      Match is currently being played...
+                    <div className="mt-4">
+                      <Scorer 
+                        lobbyId={currentLobby.id} 
+                        onMatchComplete={() => {
+                          fetchActiveLobby();
+                          fetchLobbies();
+                        }} 
+                      />
                     </div>
                   )}
                 </div>
@@ -503,7 +495,7 @@ export default function PlayerDashboard() {
                       <div className="flex gap-2">
                         <input 
                           type="text" 
-                          placeholder="Enter Lobby ID or QR Code..." 
+                          placeholder="Enter Lobby Code manually..." 
                           className="flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {

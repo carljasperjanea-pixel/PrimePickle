@@ -34,8 +34,14 @@ interface ScoreHistory {
   serverNumber: ServerState;
 }
 
-export default function Scorer() {
-  const { lobbyId } = useParams();
+interface ScorerProps {
+  lobbyId?: string;
+  onMatchComplete?: () => void;
+}
+
+export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: ScorerProps) {
+  const { lobbyId: paramLobbyId } = useParams();
+  const lobbyId = propLobbyId || paramLobbyId;
   const navigate = useNavigate();
 
   // App State
@@ -218,7 +224,11 @@ export default function Scorer() {
         score: `${team1Score}-${team2Score}`
       });
       alert('Match saved successfully!');
-      navigate('/admin'); // Or wherever appropriate
+      if (onMatchComplete) {
+        onMatchComplete();
+      } else {
+        navigate('/admin'); // Or wherever appropriate
+      }
     } catch (e: any) {
       console.error(e);
       alert('Failed to save match: ' + e.message);
@@ -230,7 +240,7 @@ export default function Scorer() {
   // Render Setup Screen
   if (gameState === 'setup') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans">
+      <div className={cn("bg-gray-50 flex items-center justify-center p-4 font-sans", onMatchComplete ? "h-full" : "min-h-screen")}>
         <div className="max-w-lg w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
           <div className="bg-gray-900 p-8 text-white flex items-center justify-between gap-6">
             <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shrink-0 overflow-hidden border-4 border-orange-500/20 p-1">
@@ -336,7 +346,7 @@ export default function Scorer() {
             </button>
             
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => onMatchComplete ? onMatchComplete() : navigate(-1)}
               className="w-full mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
             >
               Cancel
@@ -348,7 +358,7 @@ export default function Scorer() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col max-w-md mx-auto shadow-2xl overflow-hidden relative font-sans">
+    <div className={cn("bg-gray-50 flex flex-col max-w-md mx-auto shadow-2xl overflow-hidden relative font-sans", onMatchComplete ? "h-full rounded-xl border" : "min-h-screen")}>
       <header className="bg-white p-4 flex items-center justify-between border-b border-gray-200 z-10">
         <button onClick={resetGame} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
           <ArrowLeft className="w-6 h-6 text-gray-600" />

@@ -223,19 +223,9 @@ function LobbyCard({ lobby, index, onViewQR, onCompleteMatch }: { lobby: any, in
           </div>
           <p className="text-sm text-gray-500">{players.length}/4 players joined</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onViewQR} className="gap-2 text-gray-600 border-gray-300">
-            <QrCode className="w-4 h-4" /> QR
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => navigate(`/scorer/${lobby.id}`)} 
-            className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50"
-          >
-            <Activity className="w-4 h-4" /> Score
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={onViewQR} className="gap-2 text-gray-600 border-gray-300">
+          <QrCode className="w-4 h-4" /> QR
+        </Button>
       </div>
 
       <div className="p-5 space-y-6 bg-white">
