@@ -55,7 +55,12 @@ async function verifyFix() {
 
   const { error: insertError } = await supabase
     .from('profiles')
-    .insert([{ id: testId, email: testEmail, display_name: 'RLS Test' }]);
+    .insert([{ 
+      id: testId, 
+      email: testEmail, 
+      display_name: 'RLS Test',
+      password_hash: 'dummy_hash_for_test' 
+    }]);
 
   if (insertError) {
     console.error('❌ RLS Test Failed (Insert Profile):', insertError.message);
