@@ -516,7 +516,11 @@ export default function PlayerDashboard() {
                         onScan={(result) => {
                           if (result && result[0]) {
                             setScanning(false);
-                            handleJoinLobby(result[0].rawValue);
+                            const rawValue = result[0].rawValue;
+                            // Clean up value: remove quotes if present, trim whitespace
+                            const cleanValue = rawValue.replace(/^"|"$/g, '').trim();
+                            console.log('Scanned QR:', cleanValue);
+                            handleJoinLobby(cleanValue);
                           }
                         }}
                         onError={(error: any) => console.log(error?.message)}

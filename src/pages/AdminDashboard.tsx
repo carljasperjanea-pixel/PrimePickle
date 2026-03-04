@@ -167,7 +167,7 @@ export default function AdminDashboard() {
             </div>
             <div className="p-8 flex flex-col items-center gap-4">
               <div className="bg-white p-4 rounded-xl shadow-inner border">
-                <QRCodeSVG value={qrLobby.qr_payload} size={200} />
+                <QRCodeSVG value={String(qrLobby.qr_payload)} size={200} />
               </div>
               <div className="text-center space-y-2">
                 <p className="text-sm text-muted-foreground">Scan to join Lobby</p>

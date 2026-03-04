@@ -513,7 +513,11 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
 
 // Join Lobby via QR Scan
 router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
-  const { qr_payload } = req.body;
+  let { qr_payload } = req.body;
+  if (typeof qr_payload === 'string') {
+    qr_payload = qr_payload.trim().replace(/^"|"$/g, '');
+  }
+  console.log(`[DEBUG] /lobbies/join called. User: ${req.user.id}, Payload: "${qr_payload}"`);
   
   try {
     // Find lobby by QR payload
@@ -522,6 +526,8 @@ router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
       .select('*')
       .eq('qr_payload', qr_payload)
       .single();
+    
+    console.log('[DEBUG] Lobby lookup result:', { lobby, error: lobbyError });
     
     if (lobbyError || !lobby) {
       return res.status(404).json({ error: 'Invalid QR Code' });
