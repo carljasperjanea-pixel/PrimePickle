@@ -4,6 +4,7 @@ export async function apiRequest(endpoint: string, method: string = 'GET', body?
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include', // Ensure cookies are sent with requests
   };
 
   if (body) {
@@ -12,15 +13,19 @@ export async function apiRequest(endpoint: string, method: string = 'GET', body?
 
   const response = await fetch(`/api${endpoint}`, options);
   
-  if (response.status === 401) {
+  if (response.status === 401 && !endpoint.startsWith('/auth/')) {
     // Handle unauthorized (redirect to login if needed)
+    // Only redirect if NOT an auth endpoint (like login itself)
     window.location.href = '/login';
     throw new Error('Unauthorized');
   }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'API request failed');
+    const message = errorData.error || `API request failed with status ${response.status}`;
+    const details = errorData.details ? `\nDetails: ${errorData.details}` : '';
+    const hint = errorData.hint ? `\nHint: ${errorData.hint}` : '';
+    throw new Error(`${message}${details}${hint}`);
   }
 
   return response.json();
