@@ -684,13 +684,26 @@ router.get('/lobbies/:id', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Complete Match (Admin only)
+// Complete Match (Admin or Participating Player)
 router.post('/matches/complete', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.sendStatus(403);
-  
   const { lobby_id, winner_team, score } = req.body; // winner_team: 'A' or 'B'
   
   try {
+    // Authorization Check
+    if (req.user.role !== 'admin') {
+      // Check if user is a participant in this lobby
+      const { data: membership, error: memError } = await supabase
+        .from('lobby_players')
+        .select('id')
+        .eq('lobby_id', lobby_id)
+        .eq('profile_id', req.user.id)
+        .single();
+
+      if (memError || !membership) {
+        return res.status(403).json({ error: 'Unauthorized: You are not a participant in this match' });
+      }
+    }
+
     const { data: lobby, error: lobbyError } = await supabase
       .from('lobbies')
       .select('*')
@@ -716,6 +729,21 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
       .in('id', lobbyPlayers?.map((lp: any) => lp.profile_id) || []);
 
     if (pError) throw pError;
+
+    // Optimistic Lock: Try to set status to 'completed' to prevent double submission
+    // We do this BEFORE updating MMR to ensure only one request succeeds.
+    const { data: lockedLobby, error: lockError } = await supabase
+      .from('lobbies')
+      .update({ status: 'completed' })
+      .eq('id', lobby_id)
+      .eq('status', 'in_progress') // Ensure we are the first
+      .select()
+      .single();
+
+    if (lockError || !lockedLobby) {
+       console.log('[DEBUG] Match completion race condition detected or invalid state.');
+       return res.status(400).json({ error: 'Match already completed or invalid state' });
+    }
 
     // Map back to ordered list
     const orderedPlayers = lobbyPlayers?.map((lp: any) => players?.find((p: any) => p.id === lp.profile_id)).filter(Boolean) || [];
@@ -759,8 +787,7 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
       mmr_delta: mmrDeltaWin
     }]);
       
-    // Close Lobby
-    await supabase.from('lobbies').update({ status: 'completed' }).eq('id', lobby_id);
+    // Lobby status is already updated to 'completed' by the optimistic lock above.
     
     res.json({ message: 'Match completed and MMR updated' });
     
