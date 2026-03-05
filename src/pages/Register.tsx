@@ -8,6 +8,7 @@ import { apiRequest } from '@/lib/api';
 export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
@@ -21,6 +22,7 @@ export default function Register() {
       const data = await apiRequest('/auth/signup', 'POST', { 
         email, 
         password, 
+        full_name: fullName,
         display_name: displayName,
         address,
         phone,
@@ -45,6 +47,14 @@ export default function Register() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Full Name</label>
+              <Input 
+                value={fullName} 
+                onChange={(e) => setFullName(e.target.value)} 
+                required 
+              />
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Display Name</label>
               <Input 

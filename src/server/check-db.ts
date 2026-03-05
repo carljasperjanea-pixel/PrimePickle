@@ -91,6 +91,22 @@ async function checkDb() {
   } else {
     console.log('Success! "profiles.address" column exists.');
   }
+  // Check for 'full_name' column in 'profiles'
+  console.log('Checking schema for "profiles.full_name"...');
+  const { error: fullNameError } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .limit(1);
+
+  if (fullNameError) {
+    console.error('Error checking "profiles.full_name":', fullNameError);
+    if (fullNameError.code === '42703') { // Undefined column
+      console.error('--> CONCLUSION: The "full_name" column is missing from the "profiles" table.');
+      console.error('--> ACTION: Run "src/server/migration_add_full_name.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "profiles.full_name" column exists.');
+  }
 }
 
 checkDb();

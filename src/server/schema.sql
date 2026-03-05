@@ -6,6 +6,7 @@ create table if not exists profiles (
   id uuid primary key default uuid_generate_v4(),
   email text unique not null,
   password_hash text not null,
+  full_name text,
   display_name text,
   role text default 'player',
   avatar_url text,

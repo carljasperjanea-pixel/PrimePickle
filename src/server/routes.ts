@@ -22,7 +22,7 @@ const authenticateToken = (req: any, res: any, next: any) => {
 // --- Auth Routes ---
 
 router.post('/auth/signup', async (req, res) => {
-  const { email, password, display_name, role, address, phone } = req.body;
+  const { email, password, display_name, full_name, role, address, phone } = req.body;
   
   // Pre-check for Publishable Key
   if (supabaseKeyConfig && supabaseKeyConfig.startsWith('sb_publishable')) {
@@ -58,6 +58,7 @@ router.post('/auth/signup', async (req, res) => {
           email, 
           password_hash: hashedPassword, 
           display_name, 
+          full_name,
           role: role || 'player',
           address: address || null,
           phone: phone || null
@@ -93,7 +94,7 @@ router.post('/auth/signup', async (req, res) => {
 
     const token = jwt.sign({ id, email, role: role || 'player' }, JWT_SECRET);
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
-    res.json({ user: { id, email, display_name, role: role || 'player' } });
+    res.json({ user: { id, email, display_name, full_name, role: role || 'player' } });
   } catch (error: any) {
     console.error('Signup Exception:', error);
     res.status(500).json({ 
@@ -170,7 +171,7 @@ router.get('/user', authenticateToken, async (req: any, res) => {
   try {
     const { data: user, error } = await supabase
       .from('profiles')
-      .select('id, email, display_name, phone, address, avatar_url, mmr, games_played, role')
+      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role')
       .eq('id', req.user.id)
       .single();
 
