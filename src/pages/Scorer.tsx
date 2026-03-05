@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RotateCcw, Minus, Plus, Trophy, Save, ArrowLeft } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
@@ -43,6 +43,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
   const { lobbyId: paramLobbyId } = useParams();
   const lobbyId = propLobbyId || paramLobbyId;
   const navigate = useNavigate();
+  const wsRef = useRef<WebSocket | null>(null);
 
   // App State
   const [gameState, setGameState] = useState<GameState>('setup');
@@ -65,6 +66,49 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
   const [history, setHistory] = useState<ScoreHistory[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [winner, setWinner] = useState<'team1' | 'team2' | null>(null);
+
+  // WebSocket Connection
+  useEffect(() => {
+    if (!lobbyId) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('Connected to WebSocket');
+      ws.send(JSON.stringify({ type: 'JOIN_LOBBY', lobbyId }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'GAME_STATE_UPDATE') {
+          const serverState = data.payload;
+          setGameState(serverState.status);
+          setSettings(serverState.settings);
+          setTeam1Score(serverState.team1Score);
+          setTeam2Score(serverState.team2Score);
+          setServingTeam(serverState.servingTeam);
+          setServerNumber(serverState.serverNumber);
+          setHistory(serverState.history);
+          setWinner(serverState.winner);
+        }
+      } catch (e) {
+        console.error('Error parsing WebSocket message', e);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('Disconnected from WebSocket');
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [lobbyId]);
 
   // Fetch Lobby Details on Mount
   useEffect(() => {
@@ -76,143 +120,128 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
   const fetchLobbyDetails = async () => {
     try {
       const data = await apiRequest(`/lobbies/${lobbyId}`);
+      let newSettings: Partial<MatchSettings> = {};
+
       if (data.lobby) {
-        setSettings(prev => ({
-          ...prev,
-          matchPoint: data.lobby.match_goal || 11,
-        }));
+        newSettings.matchPoint = data.lobby.match_goal || 11;
+        
+        // If the lobby is already in progress, ensure the game starts on the WS server
+        if (data.lobby.status === 'in_progress') {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+          } else {
+            // Retry once if WS is not open yet
+            setTimeout(() => {
+               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+              }
+            }, 1000);
+          }
+        }
       }
       if (data.players && data.players.length > 0) {
         const teamA = data.players.filter((p: any) => p.team === 'A');
         const teamB = data.players.filter((p: any) => p.team === 'B');
         
-        setSettings(prev => ({
-          ...prev,
+        newSettings = {
+          ...newSettings,
           team1Name: 'Team A',
           team1Player1: teamA[0]?.display_name || '',
           team1Player2: teamA[1]?.display_name || '',
           team2Name: 'Team B',
           team2Player1: teamB[0]?.display_name || '',
           team2Player2: teamB[1]?.display_name || '',
-        }));
+        };
       }
+
+      // Update local settings immediately for better UX (optional, but good)
+      setSettings(prev => ({ ...prev, ...newSettings }));
+
+      // Sync settings to server via WebSocket
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'UPDATE_SETTINGS',
+          lobbyId,
+          payload: newSettings
+        }));
+      } else {
+        // Retry once if WS is not open yet (simple retry)
+        setTimeout(() => {
+           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              type: 'UPDATE_SETTINGS',
+              lobbyId,
+              payload: newSettings
+            }));
+          }
+        }, 1000);
+      }
+
     } catch (e) {
       console.error("Failed to fetch lobby details", e);
     }
   };
 
-  // Game Logic Helper
-  const isGameOver = (s1: number, s2: number) => {
-    const target = settings.matchPoint;
-    if (settings.winByTwo) {
-      if (s1 >= target && s1 - s2 >= 2) return 'team1';
-      if (s2 >= target && s2 - s1 >= 2) return 'team2';
-    } else {
-      if (s1 >= target) return 'team1';
-      if (s2 >= target) return 'team2';
-    }
-    return null;
-  };
-
   // Setup Handlers
   const startGame = () => {
-    setTeam1Score(0);
-    setTeam2Score(0);
-    setServingTeam('team1');
-    setServerNumber(2); // Game starts at 0-0-2
-    setHistory([]);
-    setGameState('playing');
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+    }
   };
 
   const resetGame = () => {
     if (confirm('Are you sure you want to reset the current game?')) {
-      setGameState('setup');
+      if (wsRef.current) {
+        wsRef.current.send(JSON.stringify({ type: 'RESET_GAME', lobbyId }));
+      }
     }
   };
 
   const startNewMatch = () => {
-    setGameState('setup');
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'RESET_GAME', lobbyId }));
+    }
   };
 
   // Game Logic Handlers
-  const saveHistory = () => {
-    setHistory(prev => [...prev, {
-      team1Score,
-      team2Score,
-      servingTeam,
-      serverNumber
-    }]);
-  };
-
   const undoLastAction = () => {
-    if (history.length === 0) return;
-    const lastState = history[history.length - 1];
-    setTeam1Score(lastState.team1Score);
-    setTeam2Score(lastState.team2Score);
-    setServingTeam(lastState.servingTeam);
-    setServerNumber(lastState.serverNumber);
-    setHistory(prev => prev.slice(0, -1));
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'UNDO', lobbyId }));
+    }
   };
 
   const handleRallyWin = (winningTeam: TeamId) => {
-    if (isGameOver(team1Score, team2Score)) return;
-
-    saveHistory();
-
-    if (winningTeam === servingTeam) {
-      // Serving team won the rally -> Point!
-      if (servingTeam === 'team1') {
-        const newScore = team1Score + 1;
-        // Enforce cap if winByTwo is false
-        if (!settings.winByTwo && newScore > settings.matchPoint) return; 
-        setTeam1Score(newScore);
-      } else {
-        const newScore = team2Score + 1;
-        // Enforce cap if winByTwo is false
-        if (!settings.winByTwo && newScore > settings.matchPoint) return;
-        setTeam2Score(newScore);
-      }
-    } else {
-      // Receiving team won the rally -> Side Out or Next Server
-      if (serverNumber === 1) {
-        // Move to second server
-        setServerNumber(2);
-      } else {
-        // Side Out
-        setServingTeam(prev => prev === 'team1' ? 'team2' : 'team1');
-        setServerNumber(1);
-      }
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ 
+        type: 'RALLY_WIN', 
+        lobbyId, 
+        payload: { winningTeam } 
+      }));
     }
   };
 
   // Manual Overrides
   const manualAdjustScore = (team: TeamId, delta: number) => {
-    if (isGameOver(team1Score, team2Score) && delta > 0) return;
-
-    saveHistory();
-    if (team === 'team1') {
-      const newScore = Math.max(0, team1Score + delta);
-      if (!settings.winByTwo && newScore > settings.matchPoint) return;
-      setTeam1Score(newScore);
-    } else {
-      const newScore = Math.max(0, team2Score + delta);
-      if (!settings.winByTwo && newScore > settings.matchPoint) return;
-      setTeam2Score(newScore);
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ 
+        type: 'MANUAL_ADJUST', 
+        lobbyId, 
+        payload: { team, delta } 
+      }));
     }
   };
 
   const toggleServer = () => {
-    saveHistory();
-    setServerNumber(prev => prev === 1 ? 2 : 1);
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'TOGGLE_SERVER', lobbyId }));
+    }
   };
 
   const toggleServingTeam = () => {
-    saveHistory();
-    setServingTeam(prev => prev === 'team1' ? 'team2' : 'team1');
-    setServerNumber(1);
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'TOGGLE_SERVING_TEAM', lobbyId }));
+    }
   };
-
-  const winner = isGameOver(team1Score, team2Score);
 
   const handleSaveMatch = async () => {
     if (!winner || !lobbyId) return;
@@ -234,6 +263,19 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
       alert('Failed to save match: ' + e.message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const updateSettings = (newSettings: Partial<MatchSettings>) => {
+    // Optimistic update
+    setSettings(prev => ({ ...prev, ...newSettings }));
+    
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({
+        type: 'UPDATE_SETTINGS',
+        lobbyId,
+        payload: newSettings
+      }));
     }
   };
 
@@ -260,7 +302,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
                 {[11, 15, 21].map(points => (
                   <button
                     key={points}
-                    onClick={() => setSettings(s => ({ ...s, matchPoint: points }))}
+                    onClick={() => updateSettings({ matchPoint: points })}
                     className={cn(
                       "py-3 rounded-xl font-bold text-lg transition-all border-2",
                       settings.matchPoint === points
@@ -277,7 +319,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
                   type="checkbox" 
                   id="winByTwo" 
                   checked={settings.winByTwo} 
-                  onChange={(e) => setSettings(s => ({ ...s, winByTwo: e.target.checked }))}
+                  onChange={(e) => updateSettings({ winByTwo: e.target.checked })}
                   className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500 border-gray-300"
                 />
                 <label htmlFor="winByTwo" className="text-sm text-gray-600">Win by 2 (Uncheck for hard cap)</label>
@@ -289,7 +331,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
               <input
                 type="text"
                 value={settings.team1Name}
-                onChange={(e) => setSettings(s => ({ ...s, team1Name: e.target.value }))}
+                onChange={(e) => updateSettings({ team1Name: e.target.value })}
                 className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 font-bold"
                 placeholder="Team Name"
               />
@@ -297,14 +339,14 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
                 <input
                   type="text"
                   value={settings.team1Player1}
-                  onChange={(e) => setSettings(s => ({ ...s, team1Player1: e.target.value }))}
+                  onChange={(e) => updateSettings({ team1Player1: e.target.value })}
                   className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Player 1"
                 />
                 <input
                   type="text"
                   value={settings.team1Player2}
-                  onChange={(e) => setSettings(s => ({ ...s, team1Player2: e.target.value }))}
+                  onChange={(e) => updateSettings({ team1Player2: e.target.value })}
                   className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Player 2"
                 />
@@ -316,7 +358,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
               <input
                 type="text"
                 value={settings.team2Name}
-                onChange={(e) => setSettings(s => ({ ...s, team2Name: e.target.value }))}
+                onChange={(e) => updateSettings({ team2Name: e.target.value })}
                 className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 font-bold"
                 placeholder="Team Name"
               />
@@ -324,14 +366,14 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
                 <input
                   type="text"
                   value={settings.team2Player1}
-                  onChange={(e) => setSettings(s => ({ ...s, team2Player1: e.target.value }))}
+                  onChange={(e) => updateSettings({ team2Player1: e.target.value })}
                   className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Player 1"
                 />
                 <input
                   type="text"
                   value={settings.team2Player2}
-                  onChange={(e) => setSettings(s => ({ ...s, team2Player2: e.target.value }))}
+                  onChange={(e) => updateSettings({ team2Player2: e.target.value })}
                   className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Player 2"
                 />

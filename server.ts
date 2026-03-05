@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
 import apiRoutes from './src/server/routes.js';
 import dotenv from 'dotenv';
+import { setupWebSocket } from './src/server/websocket.js';
 
 dotenv.config();
 
@@ -37,9 +38,11 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  setupWebSocket(server);
 }
 
 startServer();
