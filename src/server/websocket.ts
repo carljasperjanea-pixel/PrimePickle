@@ -69,6 +69,7 @@ export function setupWebSocket(server: Server) {
     ws.on('message', (message: string) => {
       try {
         const data = JSON.parse(message);
+        console.log(`Received WS message: ${data.type} for lobby ${data.lobbyId || currentLobbyId}`);
 
         switch (data.type) {
           case 'JOIN_LOBBY':
@@ -80,6 +81,7 @@ export function setupWebSocket(server: Server) {
             break;
           case 'START_GAME':
             if (currentLobbyId) handleStartGame(currentLobbyId);
+            else console.warn('START_GAME received but no currentLobbyId');
             break;
           case 'RALLY_WIN':
             if (currentLobbyId) handleRallyWin(currentLobbyId, data.payload.winningTeam);
@@ -123,8 +125,10 @@ export function setupWebSocket(server: Server) {
   });
 
   function handleJoinLobby(ws: WebSocket, lobbyId: string) {
+    console.log(`Client joining lobby ${lobbyId}`);
     let lobby = lobbies.get(lobbyId);
     if (!lobby) {
+      console.log(`Creating new lobby ${lobbyId}`);
       lobby = {
         id: lobbyId,
         clients: new Set(),
@@ -145,11 +149,19 @@ export function setupWebSocket(server: Server) {
   }
 
   function handleStartGame(lobbyId: string) {
+    console.log(`Starting game for lobby ${lobbyId}`);
     const lobby = lobbies.get(lobbyId);
-    if (!lobby) return;
+    if (!lobby) {
+        console.error(`Lobby ${lobbyId} not found during START_GAME`);
+        return;
+    }
 
     // Only start if not already playing to prevent resets
-    if (lobby.gameState.status === 'playing') return;
+    if (lobby.gameState.status === 'playing') {
+        console.log(`Lobby ${lobbyId} already playing, broadcasting state`);
+        broadcastState(lobby);
+        return;
+    }
 
     lobby.gameState.status = 'playing';
     lobby.gameState.team1Score = 0;
@@ -158,6 +170,7 @@ export function setupWebSocket(server: Server) {
     lobby.gameState.serverNumber = 2;
     lobby.gameState.history = [];
     lobby.gameState.winner = null;
+    console.log(`Game started for lobby ${lobbyId}, broadcasting state`);
     broadcastState(lobby);
   }
 

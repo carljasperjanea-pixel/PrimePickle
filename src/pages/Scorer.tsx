@@ -184,8 +184,12 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
   // Setup Handlers
   const startGame = () => {
-    if (wsRef.current) {
+    console.log('Start Game clicked', { lobbyId, wsState: wsRef.current?.readyState });
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+    } else {
+      console.error('WebSocket not connected');
+      alert('Connection to server lost. Please refresh the page.');
     }
   };
 
