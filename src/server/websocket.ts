@@ -332,7 +332,7 @@ export function setupWebSocket(server: Server) {
 
   function sendStateToClient(ws: WebSocket, lobbyId: string) {
     const lobby = lobbies.get(lobbyId);
-    if (lobby) {
+    if (lobby && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: 'GAME_STATE_UPDATE',
         payload: lobby.gameState

@@ -75,8 +75,11 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
     let ws: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout;
+    let isMounted = true;
 
     const connect = () => {
+      if (!isMounted) return;
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       
@@ -85,12 +88,19 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (!isMounted) {
+          ws?.close();
+          return;
+        }
         console.log('Connected to WebSocket');
         setIsConnected(true);
-        ws?.send(JSON.stringify({ type: 'JOIN_LOBBY', lobbyId }));
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'JOIN_LOBBY', lobbyId }));
+        }
       };
 
       ws.onmessage = (event) => {
+        if (!isMounted) return;
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'GAME_STATE_UPDATE') {
@@ -110,6 +120,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
       };
 
       ws.onclose = () => {
+        if (!isMounted) return;
         console.log('Disconnected from WebSocket');
         setIsConnected(false);
         // Try to reconnect
@@ -118,17 +129,37 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
       ws.onerror = (error) => {
         console.error("WebSocket error:", error);
-        ws?.close();
+        // Don't close here, let onclose handle it, or close if it's stuck
       };
     };
 
     connect();
 
     return () => {
-      if (ws) ws.close();
+      isMounted = false;
+      if (ws) {
+        ws.onopen = null;
+        ws.onclose = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.close();
+      }
       clearTimeout(reconnectTimeout);
     };
   }, [lobbyId]);
+
+  // Helper to safely send messages
+  const sendMessage = (message: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify(message));
+      } catch (err) {
+        console.error('Failed to send WebSocket message:', err);
+      }
+    } else {
+      console.warn('WebSocket not connected, cannot send:', message.type);
+    }
+  };
 
   // WebSocket Connection Helper
   const waitForConnection = (timeout = 5000): Promise<WebSocket> => {
@@ -166,7 +197,9 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
         if (data.lobby.status === 'in_progress') {
           waitForConnection().then(ws => {
             console.log('Syncing game start with server...');
-            ws.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+            }
           }).catch(err => console.error('Failed to sync game start:', err));
         }
       }
@@ -190,11 +223,13 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
       // Sync settings to server via WebSocket
       waitForConnection().then(ws => {
-        ws.send(JSON.stringify({
-          type: 'UPDATE_SETTINGS',
-          lobbyId,
-          payload: newSettings
-        }));
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'UPDATE_SETTINGS',
+            lobbyId,
+            payload: newSettings
+          }));
+        }
       }).catch(err => console.error('Failed to sync settings:', err));
 
     } catch (e) {
@@ -207,7 +242,11 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
     console.log('Start Game clicked', { lobbyId });
     try {
       const ws = await waitForConnection();
-      ws.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+      } else {
+        throw new Error('WebSocket not open');
+      }
     } catch (e) {
       console.error('WebSocket not connected', e);
       alert('Connection to server lost. Attempting to reconnect...');
@@ -216,56 +255,42 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
   const resetGame = () => {
     if (confirm('Are you sure you want to reset the current game?')) {
-      if (wsRef.current) {
-        wsRef.current.send(JSON.stringify({ type: 'RESET_GAME', lobbyId }));
-      }
+      sendMessage({ type: 'RESET_GAME', lobbyId });
     }
   };
 
   const startNewMatch = () => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'RESET_GAME', lobbyId }));
-    }
+    sendMessage({ type: 'RESET_GAME', lobbyId });
   };
 
   // Game Logic Handlers
   const undoLastAction = () => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'UNDO', lobbyId }));
-    }
+    sendMessage({ type: 'UNDO', lobbyId });
   };
 
   const handleRallyWin = (winningTeam: TeamId) => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ 
-        type: 'RALLY_WIN', 
-        lobbyId, 
-        payload: { winningTeam } 
-      }));
-    }
+    sendMessage({ 
+      type: 'RALLY_WIN', 
+      lobbyId, 
+      payload: { winningTeam } 
+    });
   };
 
   // Manual Overrides
   const manualAdjustScore = (team: TeamId, delta: number) => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ 
-        type: 'MANUAL_ADJUST', 
-        lobbyId, 
-        payload: { team, delta } 
-      }));
-    }
+    sendMessage({ 
+      type: 'MANUAL_ADJUST', 
+      lobbyId, 
+      payload: { team, delta } 
+    });
   };
 
   const toggleServer = () => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'TOGGLE_SERVER', lobbyId }));
-    }
+    sendMessage({ type: 'TOGGLE_SERVER', lobbyId });
   };
 
   const toggleServingTeam = () => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'TOGGLE_SERVING_TEAM', lobbyId }));
-    }
+    sendMessage({ type: 'TOGGLE_SERVING_TEAM', lobbyId });
   };
 
   const handleSaveMatch = async () => {
@@ -295,13 +320,11 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
     // Optimistic update
     setSettings(prev => ({ ...prev, ...newSettings }));
     
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({
-        type: 'UPDATE_SETTINGS',
-        lobbyId,
-        payload: newSettings
-      }));
-    }
+    sendMessage({
+      type: 'UPDATE_SETTINGS',
+      lobbyId,
+      payload: newSettings
+    });
   };
 
   // Render Setup Screen
