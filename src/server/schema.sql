@@ -9,6 +9,8 @@ create table if not exists profiles (
   display_name text,
   role text default 'player',
   avatar_url text,
+  address text,
+  phone text,
   mmr integer default 1000,
   games_played integer default 0,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null

@@ -1,0 +1,3 @@
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone text;

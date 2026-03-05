@@ -74,6 +74,23 @@ async function checkDb() {
   } else {
     console.log('Success! "lobbies.started_at" column exists.');
   }
+
+  // Check for 'address' column in 'profiles'
+  console.log('Checking schema for "profiles.address"...');
+  const { error: addressError } = await supabase
+    .from('profiles')
+    .select('address')
+    .limit(1);
+
+  if (addressError) {
+    console.error('Error checking "profiles.address":', addressError);
+    if (addressError.code === '42703') { // Undefined column
+      console.error('--> CONCLUSION: The "address" column is missing from the "profiles" table.');
+      console.error('--> ACTION: Run "src/server/migration_add_profile_fields.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "profiles.address" column exists.');
+  }
 }
 
 checkDb();

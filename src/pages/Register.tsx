@@ -9,6 +9,8 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
   const [role, setRole] = useState('player'); // Default to player
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -20,6 +22,8 @@ export default function Register() {
         email, 
         password, 
         display_name: displayName,
+        address,
+        phone,
         role: 'player' // Force player role
       });
       if (data.user.role === 'admin') {
@@ -56,6 +60,23 @@ export default function Register() {
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)} 
                 required 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Phone</label>
+              <Input 
+                type="tel" 
+                value={phone} 
+                onChange={(e) => setPhone(e.target.value)} 
+                placeholder="(555) 123-4567"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Address</label>
+              <Input 
+                value={address} 
+                onChange={(e) => setAddress(e.target.value)} 
+                placeholder="123 Pickleball Lane, Austin, TX"
               />
             </div>
             <div className="space-y-2">

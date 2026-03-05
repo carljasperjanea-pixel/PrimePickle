@@ -22,7 +22,7 @@ const authenticateToken = (req: any, res: any, next: any) => {
 // --- Auth Routes ---
 
 router.post('/auth/signup', async (req, res) => {
-  const { email, password, display_name, role } = req.body;
+  const { email, password, display_name, role, address, phone } = req.body;
   
   // Pre-check for Publishable Key
   if (supabaseKeyConfig && supabaseKeyConfig.startsWith('sb_publishable')) {
@@ -53,7 +53,15 @@ router.post('/auth/signup', async (req, res) => {
     const { data, error } = await supabase
       .from('profiles')
       .insert([
-        { id, email, password_hash: hashedPassword, display_name, role: role || 'player' }
+        { 
+          id, 
+          email, 
+          password_hash: hashedPassword, 
+          display_name, 
+          role: role || 'player',
+          address: address || null,
+          phone: phone || null
+        }
       ])
       .select()
       .single();

@@ -244,11 +244,11 @@ export default function PlayerDashboard() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Address</label>
-                  <div className="text-sm text-gray-600">{user.address || '123 Pickleball Lane, Austin, TX'}</div>
+                  <div className="text-sm text-gray-600">{user.address || 'Not provided'}</div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</label>
-                  <div className="text-sm text-gray-600">{user.phone || '(555) 123-4567'}</div>
+                  <div className="text-sm text-gray-600">{user.phone || 'Not provided'}</div>
                 </div>
               </div>
             </CardContent>
