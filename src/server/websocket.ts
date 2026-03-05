@@ -81,8 +81,9 @@ export function setupWebSocket(server: Server) {
             if (currentLobbyId) handleUpdateSettings(currentLobbyId, data.payload);
             break;
           case 'START_GAME':
-            if (currentLobbyId) handleStartGame(currentLobbyId);
-            else console.warn('START_GAME received but no currentLobbyId');
+            const targetLobbyId = data.lobbyId || currentLobbyId;
+            if (targetLobbyId) handleStartGame(targetLobbyId);
+            else console.warn('START_GAME received but no lobbyId');
             break;
           case 'RALLY_WIN':
             if (currentLobbyId) handleRallyWin(currentLobbyId, data.payload.winningTeam);

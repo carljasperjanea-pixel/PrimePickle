@@ -130,6 +130,23 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
     };
   }, [lobbyId]);
 
+  // WebSocket Connection Helper
+  const waitForConnection = (timeout = 5000): Promise<WebSocket> => {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      const check = () => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          resolve(wsRef.current);
+        } else if (Date.now() - startTime > timeout) {
+          reject(new Error('WebSocket connection timeout'));
+        } else {
+          setTimeout(check, 100);
+        }
+      };
+      check();
+    });
+  };
+
   // Fetch Lobby Details on Mount
   useEffect(() => {
     if (lobbyId) {
@@ -147,16 +164,10 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
         
         // If the lobby is already in progress, ensure the game starts on the WS server
         if (data.lobby.status === 'in_progress') {
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
-          } else {
-            // Retry once if WS is not open yet
-            setTimeout(() => {
-               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
-              }
-            }, 1000);
-          }
+          waitForConnection().then(ws => {
+            console.log('Syncing game start with server...');
+            ws.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+          }).catch(err => console.error('Failed to sync game start:', err));
         }
       }
       if (data.players && data.players.length > 0) {
@@ -178,24 +189,13 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
       setSettings(prev => ({ ...prev, ...newSettings }));
 
       // Sync settings to server via WebSocket
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
+      waitForConnection().then(ws => {
+        ws.send(JSON.stringify({
           type: 'UPDATE_SETTINGS',
           lobbyId,
           payload: newSettings
         }));
-      } else {
-        // Retry once if WS is not open yet (simple retry)
-        setTimeout(() => {
-           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
-              type: 'UPDATE_SETTINGS',
-              lobbyId,
-              payload: newSettings
-            }));
-          }
-        }, 1000);
-      }
+      }).catch(err => console.error('Failed to sync settings:', err));
 
     } catch (e) {
       console.error("Failed to fetch lobby details", e);
@@ -203,12 +203,13 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
   };
 
   // Setup Handlers
-  const startGame = () => {
-    console.log('Start Game clicked', { lobbyId, wsState: wsRef.current?.readyState });
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
-    } else {
-      console.error('WebSocket not connected');
+  const startGame = async () => {
+    console.log('Start Game clicked', { lobbyId });
+    try {
+      const ws = await waitForConnection();
+      ws.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
+    } catch (e) {
+      console.error('WebSocket not connected', e);
       alert('Connection to server lost. Attempting to reconnect...');
     }
   };
