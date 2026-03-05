@@ -176,7 +176,7 @@ router.get('/user', authenticateToken, async (req: any, res) => {
   try {
     const { data: user, error } = await supabase
       .from('profiles')
-      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role')
+      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role, visibility_settings')
       .eq('id', req.user.id)
       .single();
 
@@ -190,14 +190,14 @@ router.get('/user', authenticateToken, async (req: any, res) => {
 
 // Update User Profile
 router.put('/user/profile', authenticateToken, async (req: any, res) => {
-  const { display_name, full_name, address, phone } = req.body;
+  const { display_name, full_name, address, phone, visibility_settings } = req.body;
   
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .update({ display_name, full_name, address, phone })
+      .update({ display_name, full_name, address, phone, visibility_settings })
       .eq('id', req.user.id)
-      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role')
+      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role, visibility_settings')
       .single();
 
     if (error) throw error;
@@ -205,6 +205,41 @@ router.put('/user/profile', authenticateToken, async (req: any, res) => {
   } catch (error: any) {
     console.error('Profile update error:', error);
     res.status(500).json({ error: 'Failed to update profile', details: error.message });
+  }
+});
+
+// Get Public Profile (Respects Visibility Settings)
+router.get('/public/profile/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const { data: user, error } = await supabase
+      .from('profiles')
+      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role, visibility_settings')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error || !user) return res.sendStatus(404);
+
+    // Filter based on visibility settings
+    const publicProfile: any = {
+      id: user.id,
+      display_name: user.display_name,
+      avatar_url: user.avatar_url,
+      mmr: user.mmr,
+      games_played: user.games_played,
+      role: user.role,
+    };
+
+    const settings = user.visibility_settings || { email: false, phone: false, address: false };
+
+    if (settings.email) publicProfile.email = user.email;
+    if (settings.phone) publicProfile.phone = user.phone;
+    if (settings.address) publicProfile.address = user.address;
+    if (settings.full_name) publicProfile.full_name = user.full_name;
+
+    res.json({ user: publicProfile });
+  } catch (error) {
+    console.error('Public profile fetch error:', error);
+    res.sendStatus(500);
   }
 });
 

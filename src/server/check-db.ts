@@ -107,6 +107,23 @@ async function checkDb() {
   } else {
     console.log('Success! "profiles.full_name" column exists.');
   }
+
+  // Check for 'visibility_settings' column in 'profiles'
+  console.log('Checking schema for "profiles.visibility_settings"...');
+  const { error: visibilityError } = await supabase
+    .from('profiles')
+    .select('visibility_settings')
+    .limit(1);
+
+  if (visibilityError) {
+    console.error('Error checking "profiles.visibility_settings":', visibilityError);
+    if (visibilityError.code === '42703') { // Undefined column
+      console.error('--> CONCLUSION: The "visibility_settings" column is missing from the "profiles" table.');
+      console.error('--> ACTION: Run "src/server/migration_add_visibility_settings.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "profiles.visibility_settings" column exists.');
+  }
 }
 
 checkDb();

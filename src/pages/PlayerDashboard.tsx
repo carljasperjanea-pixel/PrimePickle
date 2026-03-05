@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { apiRequest, useUser } from '@/lib/api';
-import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload } from 'lucide-react';
+import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
@@ -34,7 +35,13 @@ export default function PlayerDashboard() {
     full_name: '',
     display_name: '',
     address: '',
-    phone: ''
+    phone: '',
+    visibility_settings: {
+      email: false,
+      phone: false,
+      address: false,
+      full_name: false
+    }
   });
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +57,8 @@ export default function PlayerDashboard() {
           full_name: u.full_name || '',
           display_name: u.display_name || '',
           address: u.address || '',
-          phone: u.phone || ''
+          phone: u.phone || '',
+          visibility_settings: u.visibility_settings || { email: false, phone: false, address: false, full_name: false }
         });
         fetchLobbies();
         fetchActiveLobby();
@@ -322,6 +330,17 @@ export default function PlayerDashboard() {
                           className="col-span-3"
                         />
                       </div>
+                      <div className="grid grid-cols-4 items-center gap-4 -mt-2">
+                        <div className="col-start-2 col-span-3 flex items-center space-x-2">
+                          <Switch
+                            id="vis-full_name"
+                            checked={editForm.visibility_settings?.full_name}
+                            onCheckedChange={(checked) => setEditForm({...editForm, visibility_settings: {...editForm.visibility_settings, full_name: checked}})}
+                          />
+                          <Label htmlFor="vis-full_name" className="text-xs text-gray-500 font-normal">Show publicly</Label>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="display_name" className="text-right">
                           Display Name
@@ -333,6 +352,7 @@ export default function PlayerDashboard() {
                           className="col-span-3"
                         />
                       </div>
+
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="address" className="text-right">
                           Address
@@ -344,6 +364,17 @@ export default function PlayerDashboard() {
                           className="col-span-3"
                         />
                       </div>
+                      <div className="grid grid-cols-4 items-center gap-4 -mt-2">
+                        <div className="col-start-2 col-span-3 flex items-center space-x-2">
+                          <Switch
+                            id="vis-address"
+                            checked={editForm.visibility_settings?.address}
+                            onCheckedChange={(checked) => setEditForm({...editForm, visibility_settings: {...editForm.visibility_settings, address: checked}})}
+                          />
+                          <Label htmlFor="vis-address" className="text-xs text-gray-500 font-normal">Show publicly</Label>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="phone" className="text-right">
                           Phone
@@ -354,6 +385,28 @@ export default function PlayerDashboard() {
                           onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
                           className="col-span-3"
                         />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4 -mt-2">
+                        <div className="col-start-2 col-span-3 flex items-center space-x-2">
+                          <Switch
+                            id="vis-phone"
+                            checked={editForm.visibility_settings?.phone}
+                            onCheckedChange={(checked) => setEditForm({...editForm, visibility_settings: {...editForm.visibility_settings, phone: checked}})}
+                          />
+                          <Label htmlFor="vis-phone" className="text-xs text-gray-500 font-normal">Show publicly</Label>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Email</Label>
+                        <div className="col-span-3 flex items-center space-x-2">
+                          <Switch
+                            id="vis-email"
+                            checked={editForm.visibility_settings?.email}
+                            onCheckedChange={(checked) => setEditForm({...editForm, visibility_settings: {...editForm.visibility_settings, email: checked}})}
+                          />
+                          <Label htmlFor="vis-email" className="text-xs text-gray-500 font-normal">Show publicly</Label>
+                        </div>
                       </div>
                     </div>
                     <DialogFooter>
@@ -393,19 +446,39 @@ export default function PlayerDashboard() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Full Name</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Full Name</label>
+                    <span title={user.visibility_settings?.full_name ? "Public" : "Private"}>
+                      {user.visibility_settings?.full_name ? <Eye className="w-3 h-3 text-emerald-500" /> : <EyeOff className="w-3 h-3 text-gray-400" />}
+                    </span>
+                  </div>
                   <div className="font-medium text-gray-900">{user.full_name || user.display_name}</div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</label>
+                    <span title={user.visibility_settings?.email ? "Public" : "Private"}>
+                      {user.visibility_settings?.email ? <Eye className="w-3 h-3 text-emerald-500" /> : <EyeOff className="w-3 h-3 text-gray-400" />}
+                    </span>
+                  </div>
                   <div className="text-sm text-gray-600 truncate" title={user.email}>{user.email}</div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Address</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Address</label>
+                    <span title={user.visibility_settings?.address ? "Public" : "Private"}>
+                      {user.visibility_settings?.address ? <Eye className="w-3 h-3 text-emerald-500" /> : <EyeOff className="w-3 h-3 text-gray-400" />}
+                    </span>
+                  </div>
                   <div className="text-sm text-gray-600">{user.address || 'Not provided'}</div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</label>
+                    <span title={user.visibility_settings?.phone ? "Public" : "Private"}>
+                      {user.visibility_settings?.phone ? <Eye className="w-3 h-3 text-emerald-500" /> : <EyeOff className="w-3 h-3 text-gray-400" />}
+                    </span>
+                  </div>
                   <div className="text-sm text-gray-600">{user.phone || 'Not provided'}</div>
                 </div>
               </div>
