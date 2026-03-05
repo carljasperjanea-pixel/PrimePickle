@@ -107,8 +107,10 @@ export default function PlayerDashboard() {
     try {
       await apiRequest('/lobbies/leave', 'POST', { lobby_id: lobbyId });
       setScanResult('Left lobby successfully');
-      fetchLobbies(); // Refresh lobbies
+      setCurrentLobby(null); // Clear current lobby immediately
       setActiveLobbyPlayers([]); // Clear active lobby players
+      fetchLobbies(); // Refresh lobbies
+      fetchActiveLobby(); // Sync state
       setTimeout(() => setScanResult(null), 3000);
     } catch (err: any) {
       setError(err.message);

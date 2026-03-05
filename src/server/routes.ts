@@ -797,6 +797,52 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Cancel Match (Participating Player)
+router.post('/lobbies/cancel', authenticateToken, async (req: any, res) => {
+  const { lobby_id } = req.body;
+
+  try {
+    // Check if user is in this lobby
+    const { data: membership, error: memError } = await supabase
+      .from('lobby_players')
+      .select('*')
+      .eq('lobby_id', lobby_id)
+      .eq('profile_id', req.user.id)
+      .single();
+
+    if (memError || !membership) {
+      return res.status(403).json({ error: 'Unauthorized: You are not in this lobby' });
+    }
+
+    // Check player count to determine if full or open
+    const { count } = await supabase
+      .from('lobby_players')
+      .select('*', { count: 'exact', head: true })
+      .eq('lobby_id', lobby_id);
+
+    const newStatus = (count || 0) >= 4 ? 'full' : 'open';
+
+    const { error: updateError } = await supabase
+      .from('lobbies')
+      .update({ status: newStatus, started_at: null })
+      .eq('id', lobby_id);
+
+    if (updateError) throw updateError;
+
+    // Reset ready status for all players
+    await supabase
+      .from('lobby_players')
+      .update({ is_ready: false })
+      .eq('lobby_id', lobby_id);
+
+    res.json({ message: 'Match cancelled', status: newStatus });
+
+  } catch (error) {
+    console.error('Cancel match error:', error);
+    res.status(500).json({ error: 'Failed to cancel match' });
+  }
+});
+
 // Temporary route to seed an admin account
 router.get('/auth/seed-admin', async (req, res) => {
   try {

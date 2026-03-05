@@ -346,7 +346,22 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
             </button>
             
             <button
-              onClick={() => onMatchComplete ? onMatchComplete() : navigate(-1)}
+              onClick={async () => {
+                if (confirm('Are you sure you want to cancel the match setup?')) {
+                  if (lobbyId) {
+                    try {
+                      await apiRequest('/lobbies/cancel', 'POST', { lobby_id: lobbyId });
+                      if (onMatchComplete) onMatchComplete();
+                      else navigate(-1);
+                    } catch (e) {
+                      console.error('Failed to cancel match', e);
+                      alert('Failed to cancel match');
+                    }
+                  } else {
+                    navigate(-1);
+                  }
+                }
+              }}
               className="w-full mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
             >
               Cancel
