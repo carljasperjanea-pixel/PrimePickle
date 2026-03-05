@@ -59,13 +59,17 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
     };
   }, [lobbyId]);
 
-  const broadcastState = useCallback((newState: GameState) => {
+  const broadcastState = useCallback(async (newState: GameState) => {
     if (!lobbyId) return;
-    supabase.channel(`lobby:${lobbyId}`).send({
-      type: 'broadcast',
-      event: 'game_state_update',
-      payload: newState,
-    });
+    try {
+        await supabase.channel(`lobby:${lobbyId}`).send({
+          type: 'broadcast',
+          event: 'game_state_update',
+          payload: newState,
+        });
+    } catch (error) {
+        console.error('Failed to broadcast state:', error);
+    }
   }, [lobbyId]);
 
   // Actions
@@ -173,28 +177,41 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
   const fetchLobbyDetails = async () => {
     try {
       const data = await apiRequest(`/lobbies/${lobbyId}`);
-      let newSettings: Partial<MatchSettings> = {};
+      
+      setState(current => {
+          let newSettings = { ...current.settings };
+          let newStatus = current.status;
 
-      if (data.lobby) {
-        newSettings.matchPoint = data.lobby.match_goal || 11;
-      }
-      if (data.players && data.players.length > 0) {
-        const teamA = data.players.filter((p: any) => p.team === 'A');
-        const teamB = data.players.filter((p: any) => p.team === 'B');
-        
-        newSettings = {
-          ...newSettings,
-          team1Name: 'Team A',
-          team1Player1: teamA[0]?.display_name || '',
-          team1Player2: teamA[1]?.display_name || '',
-          team2Name: 'Team B',
-          team2Player1: teamB[0]?.display_name || '',
-          team2Player2: teamB[1]?.display_name || '',
-        };
-      }
-
-      // Update local settings immediately
-      updateSettings(newSettings);
+          if (data.lobby) {
+            newSettings.matchPoint = data.lobby.match_goal || 11;
+            // If the game is already in progress in the DB, ensure we are in 'playing' mode
+            if (data.lobby.status === 'in_progress') {
+                newStatus = 'playing';
+            }
+          }
+          
+          if (data.players && data.players.length > 0) {
+            const teamA = data.players.filter((p: any) => p.team === 'A');
+            const teamB = data.players.filter((p: any) => p.team === 'B');
+            
+            newSettings = {
+              ...newSettings,
+              team1Name: 'Team A',
+              team1Player1: teamA[0]?.display_name || '',
+              team1Player2: teamA[1]?.display_name || '',
+              team2Name: 'Team B',
+              team2Player1: teamB[0]?.display_name || '',
+              team2Player2: teamB[1]?.display_name || '',
+            };
+          }
+          
+          // Update local state ONLY (do not broadcast on fetch)
+          return {
+              ...current,
+              status: newStatus,
+              settings: newSettings
+          };
+      });
 
     } catch (e) {
       console.error("Failed to fetch lobby details", e);
@@ -309,9 +326,10 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
             <button
               onClick={startGame}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
+              disabled={!isConnected}
+              className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
             >
-              Start Match
+              {isConnected ? 'Start Match' : 'Connecting...'}
             </button>
             
             <button
