@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
+import { supabase } from './supabase.js';
 
 interface MatchSettings {
   matchPoint: number;
@@ -148,7 +149,7 @@ export function setupWebSocket(server: Server) {
     broadcastState(lobby);
   }
 
-  function handleStartGame(lobbyId: string) {
+  async function handleStartGame(lobbyId: string) {
     console.log(`Starting game for lobby ${lobbyId}`);
     const lobby = lobbies.get(lobbyId);
     if (!lobby) {
@@ -171,6 +172,26 @@ export function setupWebSocket(server: Server) {
     lobby.gameState.history = [];
     lobby.gameState.winner = null;
     console.log(`Game started for lobby ${lobbyId}, broadcasting state`);
+    
+    // Update DB status so polling clients (PlayerDashboard) can transition
+    try {
+      const { error } = await supabase
+        .from('lobbies')
+        .update({ 
+          status: 'in_progress', 
+          started_at: new Date().toISOString() 
+        })
+        .eq('id', lobbyId);
+        
+      if (error) {
+        console.error('Failed to update lobby status in DB:', error);
+      } else {
+        console.log('Lobby status updated to in_progress in DB');
+      }
+    } catch (err) {
+      console.error('Error updating lobby status in DB:', err);
+    }
+
     broadcastState(lobby);
   }
 
