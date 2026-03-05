@@ -61,7 +61,7 @@ const INITIAL_GAME_STATE: GameState = {
 };
 
 export function setupWebSocket(server: Server) {
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws) => {
     let currentLobbyId: string | null = null;

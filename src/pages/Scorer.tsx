@@ -67,46 +67,66 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
   const [history, setHistory] = useState<ScoreHistory[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [winner, setWinner] = useState<'team1' | 'team2' | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   // WebSocket Connection
   useEffect(() => {
     if (!lobbyId) return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
 
-    ws.onopen = () => {
-      console.log('Connected to WebSocket');
-      ws.send(JSON.stringify({ type: 'JOIN_LOBBY', lobbyId }));
-    };
+    const connect = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      console.log(`Connecting to WebSocket at ${wsUrl}`);
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'GAME_STATE_UPDATE') {
-          const serverState = data.payload;
-          setGameState(serverState.status);
-          setSettings(serverState.settings);
-          setTeam1Score(serverState.team1Score);
-          setTeam2Score(serverState.team2Score);
-          setServingTeam(serverState.servingTeam);
-          setServerNumber(serverState.serverNumber);
-          setHistory(serverState.history);
-          setWinner(serverState.winner);
+      ws.onopen = () => {
+        console.log('Connected to WebSocket');
+        setIsConnected(true);
+        ws?.send(JSON.stringify({ type: 'JOIN_LOBBY', lobbyId }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'GAME_STATE_UPDATE') {
+            const serverState = data.payload;
+            setGameState(serverState.status);
+            setSettings(serverState.settings);
+            setTeam1Score(serverState.team1Score);
+            setTeam2Score(serverState.team2Score);
+            setServingTeam(serverState.servingTeam);
+            setServerNumber(serverState.serverNumber);
+            setHistory(serverState.history);
+            setWinner(serverState.winner);
+          }
+        } catch (e) {
+          console.error('Error parsing WebSocket message', e);
         }
-      } catch (e) {
-        console.error('Error parsing WebSocket message', e);
-      }
+      };
+
+      ws.onclose = () => {
+        console.log('Disconnected from WebSocket');
+        setIsConnected(false);
+        // Try to reconnect
+        reconnectTimeout = setTimeout(connect, 3000);
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        ws?.close();
+      };
     };
 
-    ws.onclose = () => {
-      console.log('Disconnected from WebSocket');
-    };
+    connect();
 
     return () => {
-      ws.close();
+      if (ws) ws.close();
+      clearTimeout(reconnectTimeout);
     };
   }, [lobbyId]);
 
@@ -189,7 +209,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
       wsRef.current.send(JSON.stringify({ type: 'START_GAME', lobbyId }));
     } else {
       console.error('WebSocket not connected');
-      alert('Connection to server lost. Please refresh the page.');
+      alert('Connection to server lost. Attempting to reconnect...');
     }
   };
 
@@ -296,6 +316,11 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
             <div className="text-right">
               <h1 className="text-3xl font-bold tracking-tight">Pickleball Scorer</h1>
               <p className="text-gray-400 mt-2">Doubles Match Setup</p>
+              {!isConnected && (
+                <div className="mt-2 text-xs text-red-400 font-bold animate-pulse">
+                  Disconnected - Reconnecting...
+                </div>
+              )}
             </div>
           </div>
           
