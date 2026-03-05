@@ -2,10 +2,15 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
 import { supabase, supabaseKeyConfig } from './supabase.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
+
+// Configure Multer for file uploads (memory storage)
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 // Middleware to verify JWT
 const authenticateToken = (req: any, res: any, next: any) => {
@@ -180,6 +185,107 @@ router.get('/user', authenticateToken, async (req: any, res) => {
   } catch (error) {
     console.error('User fetch error:', error);
     res.sendStatus(500);
+  }
+});
+
+// Update User Profile
+router.put('/user/profile', authenticateToken, async (req: any, res) => {
+  const { display_name, full_name, address, phone } = req.body;
+  
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ display_name, full_name, address, phone })
+      .eq('id', req.user.id)
+      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role')
+      .single();
+
+    if (error) throw error;
+    res.json({ user: data });
+  } catch (error: any) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile', details: error.message });
+  }
+});
+
+// Upload User Avatar
+router.post('/user/avatar', authenticateToken, upload.single('avatar'), async (req: any, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  try {
+    const file = req.file;
+    const fileExt = file.originalname.split('.').pop();
+    const fileName = `${req.user.id}-${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    // Upload to Supabase Storage
+    const { data, error: uploadError } = await supabase
+      .storage
+      .from('avatars')
+      .upload(filePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.log('Upload error:', uploadError);
+      // Try to create bucket if it doesn't exist (error message might vary)
+      // Common error for missing bucket is "The resource was not found" or similar
+      try {
+        console.log('Attempting to create "avatars" bucket...');
+        const { data: bucket, error: bucketError } = await supabase.storage.createBucket('avatars', {
+            public: true,
+            fileSizeLimit: 1024 * 1024 * 2, // 2MB
+            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+        });
+        
+        if (bucketError) {
+            console.error('Failed to create avatars bucket:', bucketError);
+            // If it failed because it already exists (race condition?), we might want to ignore
+            if (!bucketError.message.includes('already exists')) {
+                 throw uploadError;
+            }
+        }
+        
+        // Retry upload
+        const { error: retryError } = await supabase
+          .storage
+          .from('avatars')
+          .upload(filePath, file.buffer, {
+            contentType: file.mimetype,
+            upsert: true
+          });
+          
+        if (retryError) throw retryError;
+        
+      } catch (e) {
+        console.error('Retry failed:', e);
+        throw uploadError;
+      }
+    }
+
+    // Get Public URL
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    // Update Profile
+    const { data: user, error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', req.user.id)
+      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role')
+      .single();
+
+    if (updateError) throw updateError;
+
+    res.json({ user, message: 'Avatar uploaded successfully' });
+  } catch (error: any) {
+    console.error('Avatar upload error:', error);
+    res.status(500).json({ error: 'Failed to upload avatar', details: error.message });
   }
 });
 

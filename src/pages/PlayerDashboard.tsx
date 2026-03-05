@@ -1,8 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { apiRequest, useUser } from '@/lib/api';
-import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X } from 'lucide-react';
+import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
@@ -16,6 +27,18 @@ export default function PlayerDashboard() {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
+  
+  // Edit Profile State
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    full_name: '',
+    display_name: '',
+    address: '',
+    phone: ''
+  });
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,6 +46,12 @@ export default function PlayerDashboard() {
       if (!u) navigate('/login');
       else {
         setUser(u);
+        setEditForm({
+          full_name: u.full_name || '',
+          display_name: u.display_name || '',
+          address: u.address || '',
+          phone: u.phone || ''
+        });
         fetchLobbies();
         fetchActiveLobby();
       }
@@ -185,6 +214,52 @@ export default function PlayerDashboard() {
     navigate('/login');
   };
 
+  const handleUpdateProfile = async () => {
+    try {
+      const res = await apiRequest('/user/profile', 'PUT', editForm);
+      setUser(res.user);
+      setIsEditOpen(false);
+      setScanResult('Profile updated successfully');
+      setTimeout(() => setScanResult(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    setIsUploading(true);
+    try {
+      // Need to use fetch directly for FormData since apiRequest might assume JSON
+      const res = await fetch('/api/user/avatar', {
+        method: 'POST',
+        body: formData,
+        // Don't set Content-Type header, let browser set it with boundary
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to upload avatar');
+      }
+
+      const data = await res.json();
+      setUser(data.user);
+      setScanResult('Avatar uploaded successfully');
+      setTimeout(() => setScanResult(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (!user) return <div className="p-8 text-center">Loading...</div>;
 
   // Mock Stats (derive from games_played if possible)
@@ -221,22 +296,105 @@ export default function PlayerDashboard() {
         <div className="lg:col-span-1 space-y-6">
           <Card className="border-none shadow-md overflow-hidden bg-white">
             <CardContent className="p-6 relative">
-              <div className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 cursor-pointer">
-                <Edit2 className="w-4 h-4" />
+              <div className="absolute top-6 right-6">
+                <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                  <DialogTrigger asChild>
+                    <div className="text-gray-400 hover:text-gray-600 cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors">
+                      <Edit2 className="w-4 h-4" />
+                    </div>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Edit Profile</DialogTitle>
+                      <DialogDescription>
+                        Make changes to your profile here. Click save when you're done.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="full_name" className="text-right">
+                          Full Name
+                        </Label>
+                        <Input
+                          id="full_name"
+                          value={editForm.full_name}
+                          onChange={(e) => setEditForm({...editForm, full_name: e.target.value})}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="display_name" className="text-right">
+                          Display Name
+                        </Label>
+                        <Input
+                          id="display_name"
+                          value={editForm.display_name}
+                          onChange={(e) => setEditForm({...editForm, display_name: e.target.value})}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="address" className="text-right">
+                          Address
+                        </Label>
+                        <Input
+                          id="address"
+                          value={editForm.address}
+                          onChange={(e) => setEditForm({...editForm, address: e.target.value})}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="phone" className="text-right">
+                          Phone
+                        </Label>
+                        <Input
+                          id="phone"
+                          value={editForm.phone}
+                          onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                          className="col-span-3"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit" onClick={handleUpdateProfile}>Save changes</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
               
               <h2 className="text-lg font-semibold mb-6">My Profile</h2>
               
-              <div className="flex flex-col items-center mb-8">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-lime-500 to-amber-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg mb-4">
-                  {user.display_name.slice(0, 2).toUpperCase()}
+              <div className="flex flex-col items-center mb-8 relative group">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-lime-500 to-amber-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg mb-4 overflow-hidden relative">
+                  {user.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.display_name} className="w-full h-full object-cover" />
+                  ) : (
+                    user.display_name?.slice(0, 2).toUpperCase()
+                  )}
+                  
+                  {/* Upload Overlay */}
+                  <div 
+                    className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="w-8 h-8 text-white" />
+                  </div>
                 </div>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                />
+                {isUploading && <div className="text-xs text-blue-600 font-medium animate-pulse">Uploading...</div>}
               </div>
 
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Full Name</label>
-                  <div className="font-medium text-gray-900">{user.display_name}</div>
+                  <div className="font-medium text-gray-900">{user.full_name || user.display_name}</div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</label>
