@@ -42,7 +42,8 @@ export default function PlayerDashboard() {
     if (currentLobby?.status === 'in_progress' && currentLobby.started_at) {
       const startTime = new Date(currentLobby.started_at).getTime();
       const now = new Date().getTime();
-      const diff = Math.ceil((startTime + 3000 - now) / 1000); // 3 seconds from start
+      // Calculate diff based on future started_at timestamp
+      const diff = Math.ceil((startTime - now) / 1000);
 
       if (diff > 0) {
         setCountdown(diff);

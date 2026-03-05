@@ -432,7 +432,7 @@ router.get('/lobbies/active', authenticateToken, async (req: any, res) => {
         // Start Game
         const { error: startError } = await supabase
           .from('lobbies')
-          .update({ status: 'in_progress', started_at: new Date().toISOString() })
+          .update({ status: 'in_progress', started_at: new Date(Date.now() + 5000).toISOString() })
           .eq('id', lobby_id);
         
         if (startError) {
