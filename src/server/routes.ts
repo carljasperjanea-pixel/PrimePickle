@@ -1238,4 +1238,129 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
       }
     });
     
+    // --- Player Gears Routes ---
+
+    // Get User's Gears
+    router.get('/user/gears', authenticateToken, async (req: any, res) => {
+      try {
+        const { data: gears, error } = await supabase
+          .from('player_gears')
+          .select('*')
+          .eq('player_id', req.user.id)
+          .order('is_primary', { ascending: false }) // Primary first
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        res.json({ gears });
+      } catch (error) {
+        console.error('Fetch gears error:', error);
+        res.status(500).json({ error: 'Failed to fetch gears' });
+      }
+    });
+
+    // Add New Gear
+    router.post('/user/gears', authenticateToken, upload.single('image'), async (req: any, res) => {
+      const { name, type } = req.body;
+      let image_url = null;
+
+      try {
+        // Handle Image Upload if present
+        if (req.file) {
+          const file = req.file;
+          const fileExt = file.originalname.split('.').pop();
+          const fileName = `gear-${req.user.id}-${Date.now()}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('avatars') // Reusing avatars bucket for now, or create 'gears' bucket
+            .upload(fileName, file.buffer, {
+              contentType: file.mimetype,
+              upsert: true
+            });
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(fileName);
+            
+          image_url = publicUrl;
+        }
+
+        // Insert Gear
+        const { data: gear, error } = await supabase
+          .from('player_gears')
+          .insert([{
+            player_id: req.user.id,
+            name,
+            type,
+            image_url,
+            is_primary: false // Default to false
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        res.json({ gear });
+
+      } catch (error: any) {
+        console.error('Add gear error:', error);
+        res.status(500).json({ error: 'Failed to add gear', details: error.message });
+      }
+    });
+
+    // Delete Gear
+    router.delete('/user/gears/:id', authenticateToken, async (req: any, res) => {
+      try {
+        const { error } = await supabase
+          .from('player_gears')
+          .delete()
+          .eq('id', req.params.id)
+          .eq('player_id', req.user.id);
+
+        if (error) throw error;
+        res.json({ message: 'Gear deleted' });
+      } catch (error) {
+        console.error('Delete gear error:', error);
+        res.status(500).json({ error: 'Failed to delete gear' });
+      }
+    });
+
+    // Set Primary Gear
+    router.put('/user/gears/:id/primary', authenticateToken, async (req: any, res) => {
+      try {
+        // 1. Get the gear to find its type
+        const { data: gear, error: fetchError } = await supabase
+          .from('player_gears')
+          .select('type')
+          .eq('id', req.params.id)
+          .eq('player_id', req.user.id)
+          .single();
+        
+        if (fetchError || !gear) throw fetchError || new Error('Gear not found');
+
+        // 2. Unset primary for all gears of this type for this user
+        await supabase
+          .from('player_gears')
+          .update({ is_primary: false })
+          .eq('player_id', req.user.id)
+          .eq('type', gear.type);
+
+        // 3. Set this gear as primary
+        const { data: updated, error: updateError } = await supabase
+          .from('player_gears')
+          .update({ is_primary: true })
+          .eq('id', req.params.id)
+          .eq('player_id', req.user.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        res.json({ gear: updated });
+
+      } catch (error) {
+        console.error('Set primary gear error:', error);
+        res.status(500).json({ error: 'Failed to set primary gear' });
+      }
+    });
+
     export default router;

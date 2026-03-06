@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { apiRequest, useUser } from '@/lib/api';
-import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload, Eye, EyeOff, Shield } from 'lucide-react';
+import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload, Eye, EyeOff, Shield, Plus, Trash2, Star, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
@@ -34,6 +34,12 @@ export default function PlayerDashboard() {
   // Rating State
   const [pendingRatingMatch, setPendingRatingMatch] = useState<any>(null);
   
+  // Gear State
+  const [gears, setGears] = useState<any[]>([]);
+  const [isAddGearOpen, setIsAddGearOpen] = useState(false);
+  const [gearForm, setGearForm] = useState({ name: '', type: 'Paddle' });
+  const [gearImage, setGearImage] = useState<File | null>(null);
+
   // Edit Profile State
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -69,6 +75,7 @@ export default function PlayerDashboard() {
         fetchActiveLobby();
         fetchPendingRatings();
         fetchMatches();
+        fetchGears();
       }
     });
 
@@ -106,6 +113,15 @@ export default function PlayerDashboard() {
       }
     }
   }, [currentLobby?.status, currentLobby?.started_at]);
+
+  const fetchGears = async () => {
+    try {
+      const data = await apiRequest('/user/gears');
+      setGears(data.gears || []);
+    } catch (e) {
+      console.error("Failed to fetch gears", e);
+    }
+  };
 
   const fetchPendingRatings = async () => {
     try {
@@ -297,6 +313,56 @@ export default function PlayerDashboard() {
       setTimeout(() => setError(''), 5000);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleAddGear = async () => {
+    if (!gearForm.name) return;
+
+    const formData = new FormData();
+    formData.append('name', gearForm.name);
+    formData.append('type', gearForm.type);
+    if (gearImage) {
+      formData.append('image', gearImage);
+    }
+
+    try {
+      const res = await fetch('/api/user/gears', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error('Failed to add gear');
+
+      fetchGears();
+      setIsAddGearOpen(false);
+      setGearForm({ name: '', type: 'Paddle' });
+      setGearImage(null);
+      setScanResult('Gear added successfully');
+      setTimeout(() => setScanResult(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
+    }
+  };
+
+  const handleDeleteGear = async (id: string) => {
+    try {
+      await apiRequest(`/user/gears/${id}`, 'DELETE');
+      fetchGears();
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
+    }
+  };
+
+  const handleSetPrimaryGear = async (id: string) => {
+    try {
+      await apiRequest(`/user/gears/${id}/primary`, 'PUT');
+      fetchGears();
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(''), 5000);
     }
   };
 
@@ -511,6 +577,116 @@ export default function PlayerDashboard() {
                   </div>
                   <div className="text-sm text-gray-600">{user.phone || 'Not provided'}</div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* My Gear */}
+          <Card className="border-none shadow-md bg-white">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-gray-500" /> My Gear
+                </h3>
+                <Dialog open={isAddGearOpen} onOpenChange={setIsAddGearOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full hover:bg-gray-100">
+                      <Plus className="w-4 h-4 text-gray-600" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Gear</DialogTitle>
+                      <DialogDescription>Add your paddle, shoes, or other equipment.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="gear-name" className="text-right">Name</Label>
+                        <Input 
+                          id="gear-name" 
+                          value={gearForm.name}
+                          onChange={(e) => setGearForm({...gearForm, name: e.target.value})}
+                          className="col-span-3" 
+                          placeholder="e.g. Carbon Pro Paddle"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="gear-type" className="text-right">Type</Label>
+                        <select 
+                          id="gear-type"
+                          value={gearForm.type}
+                          onChange={(e) => setGearForm({...gearForm, type: e.target.value})}
+                          className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <option value="Paddle">Paddle</option>
+                          <option value="Shoes">Shoes</option>
+                          <option value="Apparel">Apparel</option>
+                          <option value="Accessory">Accessory</option>
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="gear-image" className="text-right">Image</Label>
+                        <Input 
+                          id="gear-image" 
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setGearImage(e.target.files?.[0] || null)}
+                          className="col-span-3" 
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={handleAddGear}>Add Gear</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <div className="space-y-3">
+                {gears.length > 0 ? (
+                  gears.map((gear) => (
+                    <div key={gear.id} className="flex items-center gap-3 p-3 border rounded-lg bg-gray-50 group relative">
+                      <div className="w-12 h-12 bg-white rounded-md border flex items-center justify-center overflow-hidden shrink-0">
+                        {gear.image_url ? (
+                          <img src={gear.image_url} alt={gear.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon className="w-6 h-6 text-gray-300" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-gray-900 truncate">{gear.name}</div>
+                        <div className="text-xs text-gray-500">{gear.type}</div>
+                      </div>
+                      
+                      {/* Actions */}
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className={`h-7 w-7 p-0 ${gear.is_primary ? 'text-amber-500' : 'text-gray-300 hover:text-amber-500'}`}
+                          onClick={() => handleSetPrimaryGear(gear.id)}
+                          title={gear.is_primary ? "Primary Gear" : "Set as Primary"}
+                        >
+                          <Star className={`w-4 h-4 ${gear.is_primary ? 'fill-amber-500' : ''}`} />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteGear(gear.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6 text-gray-400 text-xs">
+                    No gear added yet.
+                    <br />
+                    Show off your equipment!
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

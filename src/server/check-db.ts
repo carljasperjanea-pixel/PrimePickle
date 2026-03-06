@@ -144,6 +144,23 @@ async function checkDb() {
   } else {
     console.log('Success! "matches.completed_at" column exists.');
   }
+
+  // Check for 'player_gears' table
+  console.log('Checking schema for "player_gears"...');
+  const { error: gearsError } = await supabase
+    .from('player_gears')
+    .select('id')
+    .limit(1);
+
+  if (gearsError) {
+    console.error('Error checking "player_gears":', gearsError);
+    if (gearsError.code === '42P01') { // Undefined table
+      console.error('--> CONCLUSION: The "player_gears" table does not exist.');
+      console.error('--> ACTION: Run "src/server/migration_add_player_gears.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "player_gears" table exists.');
+  }
 }
 
 checkDb();
