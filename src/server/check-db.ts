@@ -1,22 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_KEY');
-  process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase, supabaseUrlConfig, supabaseKeyConfig } from './supabase.js';
 
 async function checkDb() {
   console.log('Checking database connection...');
-  console.log('URL:', supabaseUrl);
-  console.log('Key Role:', supabaseKey.startsWith('ey') ? 'JWT (Hidden)' : 'Unknown');
+  console.log('URL:', supabaseUrlConfig);
+  console.log('Key Role:', supabaseKeyConfig?.startsWith('ey') ? 'JWT (Hidden)' : 'Unknown');
 
   // Check if we can connect and if 'profiles' table exists
   const { count, error } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
@@ -146,24 +133,16 @@ async function checkDb() {
   console.log('Checking schema for "matches"...');
   const { error: matchesError } = await supabase
     .from('matches')
-    .select('created_at')
+    .select('completed_at')
     .limit(1);
 
   if (matchesError) {
-    console.error('Error checking "matches.created_at":', matchesError);
+    console.error('Error checking "matches.completed_at":', matchesError);
+    if (matchesError.code === '42703') {
+        console.error('--> CONCLUSION: The "completed_at" column is missing from the "matches" table.');
+    }
   } else {
-    console.log('Success! "matches.created_at" column exists.');
-  }
-  
-  const { error: playedAtError } = await supabase
-    .from('matches')
-    .select('played_at')
-    .limit(1);
-
-  if (playedAtError) {
-     console.log('Note: "matches.played_at" column does not exist (using created_at instead).');
-  } else {
-     console.log('Success! "matches.played_at" column exists.');
+    console.log('Success! "matches.completed_at" column exists.');
   }
 }
 

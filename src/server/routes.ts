@@ -1098,9 +1098,9 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
     // 1. Find recent completed matches for this user (last 24 hours)
     const { data: matches, error: matchError } = await supabase
       .from('matches')
-      .select('id, created_at, lobby_id')
-      .gt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false });
+      .select('id, completed_at, lobby_id')
+      .gt('completed_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order('completed_at', { ascending: false });
 
     if (matchError) throw matchError;
 
@@ -1143,7 +1143,7 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
 
         pendingMatches.push({
           matchId: match.id,
-          playedAt: match.created_at,
+          playedAt: match.completed_at,
           playersToRate: otherPlayers.map((p: any) => p.profiles)
         });
       }
@@ -1157,4 +1157,85 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
   }
 });
 
-export default router;
+    // Get User Match History
+    router.get('/user/matches', authenticateToken, async (req: any, res) => {
+      try {
+        // 1. Get all lobby_ids the user has participated in
+        const { data: userLobbies, error: ulError } = await supabase
+          .from('lobby_players')
+          .select('lobby_id')
+          .eq('profile_id', req.user.id);
+    
+        if (ulError) throw ulError;
+    
+        const lobbyIds = userLobbies.map((l: any) => l.lobby_id);
+    
+        if (lobbyIds.length === 0) {
+          return res.json({ matches: [] });
+        }
+    
+        // 2. Fetch matches for these lobbies
+        const { data: matches, error: mError } = await supabase
+          .from('matches')
+          .select(`
+            id,
+            lobby_id,
+            winner_team,
+            score,
+            mmr_delta,
+            completed_at
+          `)
+          .in('lobby_id', lobbyIds)
+          .order('completed_at', { ascending: false });
+    
+        if (mError) throw mError;
+    
+        // 3. For each match, fetch the players and their teams
+        const { data: allPlayers, error: apError } = await supabase
+          .from('lobby_players')
+          .select(`
+            lobby_id,
+            team,
+            profiles (
+              id,
+              display_name,
+              avatar_url
+            )
+          `)
+          .in('lobby_id', matches.map((m: any) => m.lobby_id));
+    
+        if (apError) throw apError;
+    
+        // 4. Combine data
+        const matchesWithPlayers = matches.map((match: any) => {
+          const players = allPlayers
+            .filter((p: any) => p.lobby_id === match.lobby_id)
+            .map((p: any) => ({
+              id: p.profiles.id,
+              display_name: p.profiles.display_name,
+              avatar_url: p.profiles.avatar_url,
+              team: p.team
+            }));
+    
+          // Determine if user won
+          const userPlayer = players.find((p: any) => p.id === req.user.id);
+          const userTeam = userPlayer?.team;
+          const isWin = userTeam === match.winner_team;
+    
+          return {
+            ...match,
+            players,
+            result: isWin ? 'win' : 'loss',
+            user_team: userTeam
+          };
+        });
+    
+        res.json({ matches: matchesWithPlayers });
+    
+      } catch (error) {
+        console.error('Match history error:', error);
+        res.status(500).json({ error: 'Failed to fetch match history' });
+      }
+    });
+    
+    export default router;

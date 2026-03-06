@@ -25,6 +25,7 @@ export default function PlayerDashboard() {
   const [lobbies, setLobbies] = useState<any[]>([]);
   const [activeLobbyPlayers, setActiveLobbyPlayers] = useState<any[]>([]);
   const [currentLobby, setCurrentLobby] = useState<any>(null);
+  const [matches, setMatches] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -67,6 +68,7 @@ export default function PlayerDashboard() {
         fetchLobbies();
         fetchActiveLobby();
         fetchPendingRatings();
+        fetchMatches();
       }
     });
 
@@ -75,6 +77,7 @@ export default function PlayerDashboard() {
       fetchLobbies();
       fetchActiveLobby();
       fetchPendingRatings();
+      fetchMatches();
     }, 2000); // Reduced frequency slightly to avoid spamming rating checks
 
     return () => clearInterval(interval);
@@ -115,6 +118,15 @@ export default function PlayerDashboard() {
       }
     } catch (e) {
       console.error("Failed to fetch pending ratings", e);
+    }
+  };
+
+  const fetchMatches = async () => {
+    try {
+      const data = await apiRequest('/user/matches');
+      setMatches(data.matches || []);
+    } catch (e) {
+      console.error("Failed to fetch matches", e);
     }
   };
 
@@ -296,9 +308,7 @@ export default function PlayerDashboard() {
   const losses = gamesPlayed - wins;
   const winRate = gamesPlayed > 0 ? ((wins / gamesPlayed) * 100).toFixed(1) : '0.0';
 
-  // Recent Matches (Completed Lobbies)
-  const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 10);
-  
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* Header */}
@@ -817,29 +827,62 @@ export default function PlayerDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center gap-2 mb-6">
                 <Calendar className="w-5 h-5 text-gray-500" />
-                <h3 className="font-bold text-gray-900">Recent Matches</h3>
+                <h3 className="font-bold text-gray-900">Match History</h3>
               </div>
 
               <div className="space-y-4">
-                {recentMatches.length > 0 ? (
-                  recentMatches.map((match, i) => (
-                    <div key={match.id} className="flex items-center justify-between p-4 bg-white border rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${i % 2 === 0 ? 'bg-green-500' : 'bg-blue-500'}`}></div>
-                        <div>
-                          <div className="font-bold text-gray-900">Court {match.id.slice(0, 4).toUpperCase()}</div>
-                          <div className="text-xs text-gray-500">{new Date(match.created_at).toLocaleDateString()}</div>
+                {matches.length > 0 ? (
+                  matches.map((match) => (
+                    <div key={match.id} className={`flex flex-col p-4 border rounded-lg transition-colors ${match.result === 'win' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full ${match.result === 'win' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <div>
+                            <div className="font-bold text-gray-900">
+                              {match.result === 'win' ? 'Victory' : 'Defeat'}
+                            </div>
+                            <div className="text-xs text-gray-500">{new Date(match.completed_at).toLocaleDateString()} • {new Date(match.completed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-gray-900 text-lg">{match.score}</div>
+                          <div className={`text-xs font-medium ${match.result === 'win' ? 'text-green-600' : 'text-red-600'}`}>
+                            {match.result === 'win' ? '+' : '-'}{match.mmr_delta} MMR
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-gray-900">11-7</div>
-                        <div className="text-xs font-medium text-emerald-600">+20 MMR</div>
+                      
+                      {/* Players */}
+                      <div className="flex items-center justify-between text-sm">
+                         {/* Team A */}
+                         <div className="flex gap-2">
+                           {match.players.filter((p: any) => p.team === 'A').map((p: any) => (
+                             <div key={p.id} className="flex items-center gap-1 bg-white/60 px-2 py-1 rounded border border-gray-100" title={p.display_name}>
+                               <div className="w-4 h-4 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
+                                 {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full object-cover" /> : <span className="text-[8px]">{p.display_name?.slice(0, 2).toUpperCase()}</span>}
+                               </div>
+                               <span className={`text-xs ${p.id === user.id ? 'font-bold' : ''}`}>{p.display_name.split(' ')[0]}</span>
+                             </div>
+                           ))}
+                         </div>
+                         <div className="text-xs text-gray-400 font-mono">VS</div>
+                         {/* Team B */}
+                         <div className="flex gap-2">
+                           {match.players.filter((p: any) => p.team === 'B').map((p: any) => (
+                             <div key={p.id} className="flex items-center gap-1 bg-white/60 px-2 py-1 rounded border border-gray-100" title={p.display_name}>
+                               <div className="w-4 h-4 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
+                                 {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full object-cover" /> : <span className="text-[8px]">{p.display_name?.slice(0, 2).toUpperCase()}</span>}
+                               </div>
+                               <span className={`text-xs ${p.id === user.id ? 'font-bold' : ''}`}>{p.display_name.split(' ')[0]}</span>
+                             </div>
+                           ))}
+                         </div>
                       </div>
                     </div>
                   ))
                 ) : (
                   <div className="text-center py-8 text-gray-400 text-sm">
-                    No recent matches found.
+                    No matches played yet.
                   </div>
                 )}
               </div>
