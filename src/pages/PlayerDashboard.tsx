@@ -395,23 +395,24 @@ export default function PlayerDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* Header */}
-      <header className="bg-gradient-to-r from-emerald-700 to-amber-500 text-white p-6 shadow-lg">
+      <header className="bg-gradient-to-r from-emerald-700 to-amber-500 text-white p-4 md:p-6 shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Trophy className="w-8 h-8 text-white" />
-            <h1 className="text-2xl font-bold leading-tight">Player Dashboard</h1>
+          <div className="flex items-center gap-2 md:gap-3">
+            <Trophy className="w-6 h-6 md:w-8 md:h-8 text-white" />
+            <h1 className="text-xl md:text-2xl font-bold leading-tight">Player Dashboard</h1>
           </div>
           <Button 
             variant="secondary" 
-            className="bg-white text-gray-800 hover:bg-gray-100 border-none shadow-sm gap-2"
+            size="sm"
+            className="bg-white text-gray-800 hover:bg-gray-100 border-none shadow-sm gap-2 text-xs md:text-sm h-8 md:h-10"
             onClick={handleLogout}
           >
-            <LogOut className="w-4 h-4" /> Logout
+            <LogOut className="w-3 h-3 md:w-4 md:h-4" /> Logout
           </Button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
         
         {/* Left Sidebar: Profile */}
         <div className="lg:col-span-1 space-y-6">
@@ -1046,27 +1047,27 @@ export default function PlayerDashboard() {
                       </div>
                       
                       {/* Players */}
-                      <div className="flex items-center justify-between text-sm">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm gap-2">
                          {/* Team A */}
-                         <div className="flex gap-2">
+                         <div className="flex flex-wrap gap-2">
                            {match.players.filter((p: any) => p.team === 'A').map((p: any) => (
-                             <div key={p.id} className="flex items-center gap-1 bg-white/60 px-2 py-1 rounded border border-gray-100" title={p.display_name}>
-                               <div className="w-4 h-4 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
+                             <div key={p.id} className="flex items-center gap-1 bg-white/60 px-2 py-1 rounded border border-gray-100 max-w-[120px]" title={p.display_name}>
+                               <div className="w-4 h-4 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center shrink-0">
                                  {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full object-cover" /> : <span className="text-[8px]">{p.display_name?.slice(0, 2).toUpperCase()}</span>}
                                </div>
-                               <span className={`text-xs ${p.id === user.id ? 'font-bold' : ''}`}>{p.display_name.split(' ')[0]}</span>
+                               <span className={`text-xs truncate ${p.id === user.id ? 'font-bold' : ''}`}>{p.display_name.split(' ')[0]}</span>
                              </div>
                            ))}
                          </div>
-                         <div className="text-xs text-gray-400 font-mono">VS</div>
+                         <div className="text-xs text-gray-400 font-mono hidden sm:block">VS</div>
                          {/* Team B */}
-                         <div className="flex gap-2">
+                         <div className="flex flex-wrap gap-2">
                            {match.players.filter((p: any) => p.team === 'B').map((p: any) => (
-                             <div key={p.id} className="flex items-center gap-1 bg-white/60 px-2 py-1 rounded border border-gray-100" title={p.display_name}>
-                               <div className="w-4 h-4 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
+                             <div key={p.id} className="flex items-center gap-1 bg-white/60 px-2 py-1 rounded border border-gray-100 max-w-[120px]" title={p.display_name}>
+                               <div className="w-4 h-4 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center shrink-0">
                                  {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full object-cover" /> : <span className="text-[8px]">{p.display_name?.slice(0, 2).toUpperCase()}</span>}
                                </div>
-                               <span className={`text-xs ${p.id === user.id ? 'font-bold' : ''}`}>{p.display_name.split(' ')[0]}</span>
+                               <span className={`text-xs truncate ${p.id === user.id ? 'font-bold' : ''}`}>{p.display_name.split(' ')[0]}</span>
                              </div>
                            ))}
                          </div>
