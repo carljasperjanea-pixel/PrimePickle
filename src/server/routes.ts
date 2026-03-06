@@ -176,7 +176,7 @@ router.get('/user', authenticateToken, async (req: any, res) => {
   try {
     const { data: user, error } = await supabase
       .from('profiles')
-      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role, visibility_settings')
+      .select('id, email, display_name, full_name, phone, address, avatar_url, mmr, games_played, role, visibility_settings, behavior_score')
       .eq('id', req.user.id)
       .single();
 

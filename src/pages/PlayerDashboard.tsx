@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { apiRequest, useUser } from '@/lib/api';
-import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload, Eye, EyeOff } from 'lucide-react';
+import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload, Eye, EyeOff, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
@@ -277,7 +277,7 @@ export default function PlayerDashboard() {
   const winRate = gamesPlayed > 0 ? ((wins / gamesPlayed) * 100).toFixed(1) : '0.0';
 
   // Recent Matches (Completed Lobbies)
-  const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 5);
+  const recentMatches = lobbies.filter(l => l.status === 'completed').slice(0, 10);
   
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -489,16 +489,29 @@ export default function PlayerDashboard() {
         {/* Right Content: Stats & Actions */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* MMR Card */}
-          <Card className="border-none shadow-md bg-orange-50/50">
-            <CardContent className="p-8 flex flex-col items-center justify-center text-center">
-              <div className="flex items-center gap-2 text-orange-600 font-medium mb-2">
-                <Trophy className="w-5 h-5" /> Current MMR
-              </div>
-              <div className="text-6xl font-bold text-amber-600 mb-1">{user.mmr || 1000}</div>
-              <div className="text-sm text-gray-500">Matchmaking Rating</div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* MMR Card */}
+            <Card className="border-none shadow-md bg-orange-50/50">
+              <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+                <div className="flex items-center gap-2 text-orange-600 font-medium mb-2">
+                  <Trophy className="w-5 h-5" /> Current MMR
+                </div>
+                <div className="text-6xl font-bold text-amber-600 mb-1">{user.mmr || 1000}</div>
+                <div className="text-sm text-gray-500">Matchmaking Rating</div>
+              </CardContent>
+            </Card>
+
+            {/* Behavior Score Card */}
+            <Card className="border-none shadow-md bg-indigo-50/50">
+              <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+                <div className="flex items-center gap-2 text-indigo-600 font-medium mb-2">
+                  <Shield className="w-5 h-5" /> Behavior Score
+                </div>
+                <div className="text-6xl font-bold text-indigo-600 mb-1">{user.behavior_score || 100}</div>
+                <div className="text-sm text-gray-500">Reputation Points</div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Stats Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -124,6 +124,23 @@ async function checkDb() {
   } else {
     console.log('Success! "profiles.visibility_settings" column exists.');
   }
+
+  // Check for 'behavior_score' column in 'profiles'
+  console.log('Checking schema for "profiles.behavior_score"...');
+  const { error: behaviorError } = await supabase
+    .from('profiles')
+    .select('behavior_score')
+    .limit(1);
+
+  if (behaviorError) {
+    console.error('Error checking "profiles.behavior_score":', behaviorError);
+    if (behaviorError.code === '42703') { // Undefined column
+      console.error('--> CONCLUSION: The "behavior_score" column is missing from the "profiles" table.');
+      console.error('--> ACTION: Run "src/server/migration_add_behavior_score.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "profiles.behavior_score" column exists.');
+  }
 }
 
 checkDb();
