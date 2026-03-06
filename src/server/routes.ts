@@ -929,8 +929,9 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
     await Promise.all(updates);
 
     // Create Match Record
+    const matchId = uuidv4();
     await supabase.from('matches').insert([{
-      id: uuidv4(),
+      id: matchId,
       lobby_id, 
       winner_team, 
       score, 
@@ -939,11 +940,74 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
       
     // Lobby status is already updated to 'completed' by the optimistic lock above.
     
-    res.json({ message: 'Match completed and MMR updated' });
+    res.json({ message: 'Match completed and MMR updated', matchId });
     
   } catch (error) {
     console.error('Complete match error:', error);
     res.status(500).json({ error: 'Failed to complete match' });
+  }
+});
+
+router.post('/matches/:matchId/rate', authenticateToken, async (req: any, res) => {
+  const { matchId } = req.params;
+  const { ratings } = req.body; // Array of { ratedId, sportsmanship, communication }
+
+  if (!Array.isArray(ratings) || ratings.length === 0) {
+    return res.status(400).json({ error: 'Invalid ratings data' });
+  }
+
+  try {
+    const raterId = req.user.id;
+
+    // Insert ratings
+    const inserts = ratings.map((r: any) => ({
+      match_id: matchId,
+      rater_id: raterId,
+      rated_id: r.ratedId,
+      sportsmanship: r.sportsmanship,
+      communication: r.communication
+    }));
+
+    const { error } = await supabase.from('player_ratings').insert(inserts);
+    if (error) {
+        if (error.code === '23505') { // Unique violation
+            return res.status(400).json({ error: 'You have already rated these players for this match.' });
+        }
+        throw error;
+    }
+
+    // Update Behavior Score for each rated player
+    for (const r of ratings) {
+      const { data: allRatings, error: fetchError } = await supabase
+        .from('player_ratings')
+        .select('sportsmanship, communication')
+        .eq('rated_id', r.ratedId);
+
+      if (fetchError) continue;
+
+      if (allRatings && allRatings.length > 0) {
+        let totalScore = 0;
+        for (const ar of allRatings) {
+          // Average of sportsmanship and communication (1-5)
+          const avg = (ar.sportsmanship + ar.communication) / 2;
+          totalScore += avg;
+        }
+        
+        // Scale 1-5 to 20-100
+        const averageRating = totalScore / allRatings.length;
+        const behaviorScore = Math.round(averageRating * 20);
+
+        await supabase
+          .from('profiles')
+          .update({ behavior_score: behaviorScore })
+          .eq('id', r.ratedId);
+      }
+    }
+
+    res.json({ message: 'Ratings submitted successfully' });
+  } catch (error) {
+    console.error('Rating error:', error);
+    res.status(500).json({ error: 'Failed to submit ratings' });
   }
 });
 
@@ -1025,6 +1089,71 @@ router.get('/auth/seed-admin', async (req, res) => {
     res.json({ message: 'Admin account created successfully', email, password });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get Pending Ratings
+router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => {
+  try {
+    // 1. Find recent completed matches for this user (last 24 hours)
+    const { data: matches, error: matchError } = await supabase
+      .from('matches')
+      .select('id, played_at, lobby_id')
+      .gt('played_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order('played_at', { ascending: false });
+
+    if (matchError) throw matchError;
+
+    if (!matches || matches.length === 0) {
+      return res.json({ pending: [] });
+    }
+
+    const pendingMatches = [];
+
+    for (const match of matches) {
+      // Check if user was in this match
+      const { data: membership, error: memError } = await supabase
+        .from('lobby_players')
+        .select('profile_id')
+        .eq('lobby_id', match.lobby_id)
+        .eq('profile_id', req.user.id)
+        .single();
+
+      if (memError || !membership) continue; // Not in this match
+
+      // Check if user has already rated ANYONE in this match
+      const { count, error: ratingError } = await supabase
+        .from('player_ratings')
+        .select('*', { count: 'exact', head: true })
+        .eq('match_id', match.id)
+        .eq('rater_id', req.user.id);
+
+      if (ratingError) continue;
+
+      if (count === 0) {
+        // User hasn't rated anyone yet. Add to pending.
+        // Fetch other players in this match to rate
+        const { data: otherPlayers, error: opError } = await supabase
+          .from('lobby_players')
+          .select('profiles(id, display_name, avatar_url)')
+          .eq('lobby_id', match.lobby_id)
+          .neq('profile_id', req.user.id);
+
+        if (opError) continue;
+
+        pendingMatches.push({
+          matchId: match.id,
+          playedAt: match.played_at,
+          playersToRate: otherPlayers.map((p: any) => p.profiles)
+        });
+      }
+    }
+
+    res.json({ pending: pendingMatches });
+
+  } catch (error) {
+    console.error('Pending ratings error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending ratings' });
   }
 });
 

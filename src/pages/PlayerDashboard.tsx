@@ -18,6 +18,7 @@ import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarC
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
+import RatingPrompt from '@/components/RatingPrompt';
 
 export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -28,6 +29,9 @@ export default function PlayerDashboard() {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
+  
+  // Rating State
+  const [pendingRatingMatch, setPendingRatingMatch] = useState<any>(null);
   
   // Edit Profile State
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -62,6 +66,7 @@ export default function PlayerDashboard() {
         });
         fetchLobbies();
         fetchActiveLobby();
+        fetchPendingRatings();
       }
     });
 
@@ -69,7 +74,8 @@ export default function PlayerDashboard() {
     const interval = setInterval(() => {
       fetchLobbies();
       fetchActiveLobby();
-    }, 1000);
+      fetchPendingRatings();
+    }, 2000); // Reduced frequency slightly to avoid spamming rating checks
 
     return () => clearInterval(interval);
   }, []);
@@ -97,6 +103,20 @@ export default function PlayerDashboard() {
       }
     }
   }, [currentLobby?.status, currentLobby?.started_at]);
+
+  const fetchPendingRatings = async () => {
+    try {
+      const data = await apiRequest('/user/pending-ratings');
+      if (data.pending && data.pending.length > 0) {
+        // Just take the first one for now
+        setPendingRatingMatch(data.pending[0]);
+      } else {
+        setPendingRatingMatch(null);
+      }
+    } catch (e) {
+      console.error("Failed to fetch pending ratings", e);
+    }
+  };
 
   const fetchLobbies = async () => {
     try {
@@ -706,6 +726,7 @@ export default function PlayerDashboard() {
                         onMatchComplete={() => {
                           fetchActiveLobby();
                           fetchLobbies();
+                          fetchPendingRatings();
                         }} 
                       />
                     </div>
@@ -827,6 +848,19 @@ export default function PlayerDashboard() {
 
         </div>
       </main>
+
+      {/* Rating Prompt */}
+      {pendingRatingMatch && (
+        <RatingPrompt
+          matchId={pendingRatingMatch.matchId}
+          players={pendingRatingMatch.playersToRate}
+          isOpen={!!pendingRatingMatch}
+          onComplete={() => {
+            setPendingRatingMatch(null);
+            fetchPendingRatings(); // Refresh to see if there are more
+          }}
+        />
+      )}
     </div>
   );
 }
