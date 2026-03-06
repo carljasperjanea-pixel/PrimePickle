@@ -1098,9 +1098,9 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
     // 1. Find recent completed matches for this user (last 24 hours)
     const { data: matches, error: matchError } = await supabase
       .from('matches')
-      .select('id, played_at, lobby_id')
-      .gt('played_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-      .order('played_at', { ascending: false });
+      .select('id, created_at, lobby_id')
+      .gt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false });
 
     if (matchError) throw matchError;
 
@@ -1143,7 +1143,7 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
 
         pendingMatches.push({
           matchId: match.id,
-          playedAt: match.played_at,
+          playedAt: match.created_at,
           playersToRate: otherPlayers.map((p: any) => p.profiles)
         });
       }

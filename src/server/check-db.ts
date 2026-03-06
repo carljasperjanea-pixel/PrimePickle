@@ -141,6 +141,30 @@ async function checkDb() {
   } else {
     console.log('Success! "profiles.behavior_score" column exists.');
   }
+
+  // Check for 'matches' table and columns
+  console.log('Checking schema for "matches"...');
+  const { error: matchesError } = await supabase
+    .from('matches')
+    .select('created_at')
+    .limit(1);
+
+  if (matchesError) {
+    console.error('Error checking "matches.created_at":', matchesError);
+  } else {
+    console.log('Success! "matches.created_at" column exists.');
+  }
+  
+  const { error: playedAtError } = await supabase
+    .from('matches')
+    .select('played_at')
+    .limit(1);
+
+  if (playedAtError) {
+     console.log('Note: "matches.played_at" column does not exist (using created_at instead).');
+  } else {
+     console.log('Success! "matches.played_at" column exists.');
+  }
 }
 
 checkDb();
