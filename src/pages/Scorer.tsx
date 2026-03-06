@@ -1,18 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RotateCcw, Minus, Plus, Trophy, Save, ArrowLeft } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { apiRequest } from '@/lib/api';
-import { supabase } from '@/lib/supabase-client';
 import { 
   GameState, 
   INITIAL_GAME_STATE, 
-  handleRallyWin, 
-  handleManualAdjust, 
-  handleToggleServer, 
-  handleToggleServingTeam, 
-  handleUndo,
   MatchSettings
 } from '@/lib/game-logic';
 
@@ -35,87 +29,111 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
   const [state, setState] = useState<GameState>(INITIAL_GAME_STATE);
   const [isSaving, setIsSaving] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const isInitialized = useRef(false);
 
-  // Supabase Realtime Subscription
+  // WebSocket Connection
   useEffect(() => {
     if (!lobbyId) return;
 
-    const channel = supabase.channel(`lobby:${lobbyId}`)
-      .on('broadcast', { event: 'game_state_update' }, (payload) => {
-        if (payload.payload) {
-            setState(payload.payload);
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connect = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      console.log('Connecting to WebSocket:', wsUrl);
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('Connected to WebSocket');
+        setIsConnected(true);
+        ws?.send(JSON.stringify({ type: 'JOIN_LOBBY', lobbyId }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Received WS message:', data.type, data.payload);
+          if (data.type === 'GAME_STATE_UPDATE') {
+            setState(data.payload);
+            
+            // On first connection (or reconnect), if state is setup, fetch details from DB
+            // to see if we should be in 'playing' mode or restore settings.
+            if (!isInitialized.current) {
+              isInitialized.current = true;
+              if (data.payload.status === 'setup') {
+                 console.log('Initial state is setup, fetching lobby details from DB...');
+                 fetchLobbyDetails();
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse WS message', e);
         }
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          setIsConnected(true);
-        } else {
-          setIsConnected(false);
-        }
-      });
+      };
+
+      ws.onclose = () => {
+        console.log('Disconnected from WebSocket');
+        setIsConnected(false);
+        isInitialized.current = false; // Reset initialization state on disconnect
+        // Try to reconnect after 3 seconds
+        reconnectTimeout = setTimeout(() => {
+          console.log('Attempting to reconnect...');
+          connect();
+        }, 3000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        ws?.close();
+      };
+    };
+
+    connect();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (ws) {
+        ws.onclose = null; // Prevent reconnect on unmount
+        ws.close();
+      }
+      clearTimeout(reconnectTimeout);
     };
   }, [lobbyId]);
 
-  const broadcastState = useCallback(async (newState: GameState) => {
-    if (!lobbyId) return;
-    try {
-        await supabase.channel(`lobby:${lobbyId}`).send({
-          type: 'broadcast',
-          event: 'game_state_update',
-          payload: newState,
-        });
-    } catch (error) {
-        console.error('Failed to broadcast state:', error);
+  const sendAction = (type: string, payload?: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type,
+        lobbyId,
+        payload
+      }));
     }
-  }, [lobbyId]);
-
-  // Actions
-  const updateState = (newState: GameState) => {
-    setState(newState);
-    broadcastState(newState);
   };
 
   const onRallyWin = (team: 'team1' | 'team2') => {
-    const newState = handleRallyWin(state, team);
-    updateState(newState);
+    sendAction('RALLY_WIN', { winningTeam: team });
   };
 
   const onManualAdjust = (team: 'team1' | 'team2', delta: number) => {
-    const newState = handleManualAdjust(state, team, delta);
-    updateState(newState);
+    sendAction('MANUAL_ADJUST', { team, delta });
   };
 
   const onToggleServer = () => {
-    const newState = handleToggleServer(state);
-    updateState(newState);
+    sendAction('TOGGLE_SERVER');
   };
 
   const onToggleServingTeam = () => {
-    const newState = handleToggleServingTeam(state);
-    updateState(newState);
+    sendAction('TOGGLE_SERVING_TEAM');
   };
 
   const onUndo = () => {
-    const newState = handleUndo(state);
-    updateState(newState);
+    sendAction('UNDO');
   };
 
   const startGame = async () => {
-    const newState = { 
-      ...state, 
-      status: 'playing' as const,
-      team1Score: 0,
-      team2Score: 0,
-      servingTeam: 'team1' as const,
-      serverNumber: 2 as const,
-      history: [],
-      winner: null
-    };
-    
-    updateState(newState);
+    sendAction('START_GAME');
     
     // Update DB status
     if (lobbyId) {
@@ -129,19 +147,16 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
   const resetGame = () => {
     if (confirm('Are you sure you want to reset the current game?')) {
-        const newState = { ...INITIAL_GAME_STATE, settings: state.settings };
-        updateState(newState);
+        sendAction('RESET_GAME');
     }
   };
 
   const startNewMatch = () => {
-    const newState = { ...INITIAL_GAME_STATE, settings: state.settings };
-    updateState(newState);
+    sendAction('RESET_GAME');
   };
 
   const updateSettings = (newSettings: Partial<MatchSettings>) => {
-    const newState = { ...state, settings: { ...state.settings, ...newSettings } };
-    updateState(newState);
+    sendAction('UPDATE_SETTINGS', newSettings);
   };
 
   const handleSaveMatch = async () => {
@@ -167,51 +182,47 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
     }
   };
 
-  // Fetch Lobby Details
-  useEffect(() => {
-    if (lobbyId) {
-      fetchLobbyDetails();
-    }
-  }, [lobbyId]);
-
   const fetchLobbyDetails = async () => {
     try {
       const data = await apiRequest(`/lobbies/${lobbyId}`);
       
-      setState(current => {
-          let newSettings = { ...current.settings };
-          let newStatus = current.status;
+      let newSettings: Partial<MatchSettings> = {};
+      let shouldStart = false;
 
-          if (data.lobby) {
-            newSettings.matchPoint = data.lobby.match_goal || 11;
-            // If the game is already in progress in the DB, ensure we are in 'playing' mode
-            if (data.lobby.status === 'in_progress') {
-                newStatus = 'playing';
-            }
-          }
-          
-          if (data.players && data.players.length > 0) {
-            const teamA = data.players.filter((p: any) => p.team === 'A');
-            const teamB = data.players.filter((p: any) => p.team === 'B');
-            
-            newSettings = {
-              ...newSettings,
-              team1Name: 'Team A',
-              team1Player1: teamA[0]?.display_name || '',
-              team1Player2: teamA[1]?.display_name || '',
-              team2Name: 'Team B',
-              team2Player1: teamB[0]?.display_name || '',
-              team2Player2: teamB[1]?.display_name || '',
-            };
-          }
-          
-          // Update local state ONLY (do not broadcast on fetch)
-          return {
-              ...current,
-              status: newStatus,
-              settings: newSettings
-          };
-      });
+      if (data.lobby) {
+        newSettings.matchPoint = data.lobby.match_goal || 11;
+        // If the game is already in progress in the DB, ensure we are in 'playing' mode
+        if (data.lobby.status === 'in_progress') {
+            shouldStart = true;
+        }
+      }
+      
+      if (data.players && data.players.length > 0) {
+        const teamA = data.players.filter((p: any) => p.team === 'A');
+        const teamB = data.players.filter((p: any) => p.team === 'B');
+        
+        newSettings = {
+          ...newSettings,
+          team1Name: 'Team A',
+          team1Player1: teamA[0]?.display_name || '',
+          team1Player2: teamA[1]?.display_name || '',
+          team2Name: 'Team B',
+          team2Player1: teamB[0]?.display_name || '',
+          team2Player2: teamB[1]?.display_name || '',
+        };
+      }
+      
+      // Send settings to WS
+      if (Object.keys(newSettings).length > 0) {
+          sendAction('UPDATE_SETTINGS', newSettings);
+      }
+
+      if (shouldStart) {
+          // We only send START_GAME if we are sure we want to sync state.
+          // But be careful not to reset score if server already has score.
+          // handleStartGame on server checks if status is already playing.
+          sendAction('START_GAME');
+      }
 
     } catch (e) {
       console.error("Failed to fetch lobby details", e);
@@ -365,8 +376,9 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
         <button onClick={resetGame} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
           <ArrowLeft className="w-6 h-6 text-gray-600" />
         </button>
-        <div className="font-mono font-bold text-gray-900">
-          GOAL: {state.settings.matchPoint}
+        <div className="font-mono font-bold text-gray-900 flex flex-col items-center">
+          <span>GOAL: {state.settings.matchPoint}</span>
+          {!isConnected && <span className="text-[10px] text-red-500 animate-pulse">Disconnected</span>}
         </div>
         <button 
           onClick={onUndo} 
