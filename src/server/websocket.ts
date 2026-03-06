@@ -1,35 +1,16 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { supabase } from './supabase.js';
-
-interface MatchSettings {
-  matchPoint: number;
-  winByTwo: boolean;
-  team1Name: string;
-  team1Player1: string;
-  team1Player2: string;
-  team2Name: string;
-  team2Player1: string;
-  team2Player2: string;
-}
-
-interface ScoreHistory {
-  team1Score: number;
-  team2Score: number;
-  servingTeam: 'team1' | 'team2';
-  serverNumber: 1 | 2;
-}
-
-interface GameState {
-  status: 'setup' | 'playing' | 'finished';
-  settings: MatchSettings;
-  team1Score: number;
-  team2Score: number;
-  servingTeam: 'team1' | 'team2';
-  serverNumber: 1 | 2;
-  history: ScoreHistory[];
-  winner: 'team1' | 'team2' | null;
-}
+import { 
+  GameState, 
+  INITIAL_GAME_STATE, 
+  MatchSettings, 
+  handleRallyWin as logicHandleRallyWin,
+  handleManualAdjust as logicHandleManualAdjust,
+  handleToggleServer as logicHandleToggleServer,
+  handleToggleServingTeam as logicHandleToggleServingTeam,
+  handleUndo as logicHandleUndo
+} from '../lib/game-logic.js';
 
 interface Lobby {
   id: string;
@@ -38,28 +19,6 @@ interface Lobby {
 }
 
 const lobbies = new Map<string, Lobby>();
-
-const DEFAULT_SETTINGS: MatchSettings = {
-  matchPoint: 11,
-  winByTwo: false,
-  team1Name: 'Team A',
-  team1Player1: '',
-  team1Player2: '',
-  team2Name: 'Team B',
-  team2Player1: '',
-  team2Player2: '',
-};
-
-const INITIAL_GAME_STATE: GameState = {
-  status: 'setup',
-  settings: DEFAULT_SETTINGS,
-  team1Score: 0,
-  team2Score: 0,
-  servingTeam: 'team1',
-  serverNumber: 2,
-  history: [],
-  winner: null,
-};
 
 export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
@@ -70,7 +29,10 @@ export function setupWebSocket(server: Server) {
     ws.on('message', (message: string) => {
       try {
         const data = JSON.parse(message);
-        console.log(`Received WS message: ${data.type} for lobby ${data.lobbyId || currentLobbyId}`);
+        // Use data.lobbyId if available, otherwise fallback to currentLobbyId
+        const targetLobbyId = data.lobbyId || currentLobbyId;
+        
+        console.log(`Received WS message: ${data.type} for lobby ${targetLobbyId}`);
 
         switch (data.type) {
           case 'JOIN_LOBBY':
@@ -78,33 +40,32 @@ export function setupWebSocket(server: Server) {
             currentLobbyId = data.lobbyId;
             break;
           case 'UPDATE_SETTINGS':
-            if (currentLobbyId) handleUpdateSettings(currentLobbyId, data.payload);
+            if (targetLobbyId) handleUpdateSettings(targetLobbyId, data.payload);
             break;
           case 'START_GAME':
-            const targetLobbyId = data.lobbyId || currentLobbyId;
             if (targetLobbyId) handleStartGame(targetLobbyId);
             else console.warn('START_GAME received but no lobbyId');
             break;
           case 'RALLY_WIN':
-            if (currentLobbyId) handleRallyWin(currentLobbyId, data.payload.winningTeam);
+            if (targetLobbyId) handleRallyWin(targetLobbyId, data.payload.winningTeam);
             break;
           case 'MANUAL_ADJUST':
-            if (currentLobbyId) handleManualAdjust(currentLobbyId, data.payload.team, data.payload.delta);
+            if (targetLobbyId) handleManualAdjust(targetLobbyId, data.payload.team, data.payload.delta);
             break;
           case 'TOGGLE_SERVER':
-            if (currentLobbyId) handleToggleServer(currentLobbyId);
+            if (targetLobbyId) handleToggleServer(targetLobbyId);
             break;
           case 'TOGGLE_SERVING_TEAM':
-            if (currentLobbyId) handleToggleServingTeam(currentLobbyId);
+            if (targetLobbyId) handleToggleServingTeam(targetLobbyId);
             break;
           case 'UNDO':
-            if (currentLobbyId) handleUndo(currentLobbyId);
+            if (targetLobbyId) handleUndo(targetLobbyId);
             break;
           case 'RESET_GAME':
-            if (currentLobbyId) handleResetGame(currentLobbyId);
+            if (targetLobbyId) handleResetGame(targetLobbyId);
             break;
           case 'REQUEST_STATE':
-            if (currentLobbyId) sendStateToClient(ws, currentLobbyId);
+            if (targetLobbyId) sendStateToClient(ws, targetLobbyId);
             break;
         }
       } catch (e) {
@@ -196,129 +157,43 @@ export function setupWebSocket(server: Server) {
     broadcastState(lobby);
   }
 
-  function saveHistory(lobby: Lobby) {
-    lobby.gameState.history.push({
-      team1Score: lobby.gameState.team1Score,
-      team2Score: lobby.gameState.team2Score,
-      servingTeam: lobby.gameState.servingTeam,
-      serverNumber: lobby.gameState.serverNumber,
-    });
-  }
-
-  function isGameOver(lobby: Lobby) {
-    const { team1Score, team2Score, settings } = lobby.gameState;
-    const target = settings.matchPoint;
-    
-    if (settings.winByTwo) {
-      if (team1Score >= target && team1Score - team2Score >= 2) return 'team1';
-      if (team2Score >= target && team2Score - team1Score >= 2) return 'team2';
-    } else {
-      if (team1Score >= target) return 'team1';
-      if (team2Score >= target) return 'team2';
-    }
-    return null;
-  }
-
   function handleRallyWin(lobbyId: string, winningTeam: 'team1' | 'team2') {
     const lobby = lobbies.get(lobbyId);
-    if (!lobby || lobby.gameState.status !== 'playing') return;
+    if (!lobby) return;
 
-    if (isGameOver(lobby)) return;
-
-    saveHistory(lobby);
-
-    const { servingTeam, serverNumber, team1Score, team2Score, settings } = lobby.gameState;
-
-    if (winningTeam === servingTeam) {
-      // Serving team won the rally -> Point!
-      if (servingTeam === 'team1') {
-        const newScore = team1Score + 1;
-        if (!settings.winByTwo && newScore > settings.matchPoint) return;
-        lobby.gameState.team1Score = newScore;
-      } else {
-        const newScore = team2Score + 1;
-        if (!settings.winByTwo && newScore > settings.matchPoint) return;
-        lobby.gameState.team2Score = newScore;
-      }
-    } else {
-      // Receiving team won the rally -> Side Out or Next Server
-      if (serverNumber === 1) {
-        lobby.gameState.serverNumber = 2;
-      } else {
-        lobby.gameState.servingTeam = servingTeam === 'team1' ? 'team2' : 'team1';
-        lobby.gameState.serverNumber = 1;
-      }
-    }
-
-    const winner = isGameOver(lobby);
-    if (winner) {
-      lobby.gameState.winner = winner;
-      // lobby.gameState.status = 'finished'; // Keep playing state to allow undo? Or finish?
-      // Usually we show the winner screen but allow undo.
-    }
-
+    lobby.gameState = logicHandleRallyWin(lobby.gameState, winningTeam);
     broadcastState(lobby);
   }
 
   function handleManualAdjust(lobbyId: string, team: 'team1' | 'team2', delta: number) {
     const lobby = lobbies.get(lobbyId);
-    if (!lobby || lobby.gameState.status !== 'playing') return;
+    if (!lobby) return;
 
-    if (isGameOver(lobby) && delta > 0) return;
-
-    saveHistory(lobby);
-
-    if (team === 'team1') {
-      const newScore = Math.max(0, lobby.gameState.team1Score + delta);
-      if (!lobby.gameState.settings.winByTwo && newScore > lobby.gameState.settings.matchPoint) return;
-      lobby.gameState.team1Score = newScore;
-    } else {
-      const newScore = Math.max(0, lobby.gameState.team2Score + delta);
-      if (!lobby.gameState.settings.winByTwo && newScore > lobby.gameState.settings.matchPoint) return;
-      lobby.gameState.team2Score = newScore;
-    }
-
-    const winner = isGameOver(lobby);
-    if (winner) {
-      lobby.gameState.winner = winner;
-    } else {
-      lobby.gameState.winner = null;
-    }
-
+    lobby.gameState = logicHandleManualAdjust(lobby.gameState, team, delta);
     broadcastState(lobby);
   }
 
   function handleToggleServer(lobbyId: string) {
     const lobby = lobbies.get(lobbyId);
-    if (!lobby || lobby.gameState.status !== 'playing') return;
+    if (!lobby) return;
 
-    saveHistory(lobby);
-    lobby.gameState.serverNumber = lobby.gameState.serverNumber === 1 ? 2 : 1;
+    lobby.gameState = logicHandleToggleServer(lobby.gameState);
     broadcastState(lobby);
   }
 
   function handleToggleServingTeam(lobbyId: string) {
     const lobby = lobbies.get(lobbyId);
-    if (!lobby || lobby.gameState.status !== 'playing') return;
+    if (!lobby) return;
 
-    saveHistory(lobby);
-    lobby.gameState.servingTeam = lobby.gameState.servingTeam === 'team1' ? 'team2' : 'team1';
-    lobby.gameState.serverNumber = 1;
+    lobby.gameState = logicHandleToggleServingTeam(lobby.gameState);
     broadcastState(lobby);
   }
 
   function handleUndo(lobbyId: string) {
     const lobby = lobbies.get(lobbyId);
-    if (!lobby || lobby.gameState.history.length === 0) return;
+    if (!lobby) return;
 
-    const lastState = lobby.gameState.history.pop();
-    if (lastState) {
-      lobby.gameState.team1Score = lastState.team1Score;
-      lobby.gameState.team2Score = lastState.team2Score;
-      lobby.gameState.servingTeam = lastState.servingTeam;
-      lobby.gameState.serverNumber = lastState.serverNumber;
-      lobby.gameState.winner = null; // Reset winner on undo
-    }
+    lobby.gameState = logicHandleUndo(lobby.gameState);
     broadcastState(lobby);
   }
 
