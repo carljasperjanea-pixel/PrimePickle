@@ -85,10 +85,27 @@ export default function PlayerDashboard() {
       fetchActiveLobby();
       fetchPendingRatings();
       fetchMatches();
+      refreshUser();
     }, 2000); // Reduced frequency slightly to avoid spamming rating checks
 
     return () => clearInterval(interval);
   }, []);
+
+  const refreshUser = async () => {
+    try {
+      const userData = await useUser();
+      if (userData) {
+        setUser((prev: any) => {
+          if (JSON.stringify(prev) !== JSON.stringify(userData)) {
+            return userData;
+          }
+          return prev;
+        });
+      }
+    } catch (e) {
+      console.error("Failed to refresh user data", e);
+    }
+  };
 
   // Countdown Logic
   useEffect(() => {
