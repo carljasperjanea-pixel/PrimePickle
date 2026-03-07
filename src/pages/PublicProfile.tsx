@@ -23,15 +23,27 @@ export default function PublicProfile() {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const [userData, gearsData, matchesData] = await Promise.all([
-        apiRequest(`/public/profile/${id}`),
-        apiRequest(`/public/gears/${id}`),
-        apiRequest(`/public/matches/${id}`)
-      ]);
-
+      // Fetch user profile first (critical)
+      const userData = await apiRequest(`/public/profile/${id}`);
       setUser(userData.user);
-      setGears(gearsData.gears || []);
-      setMatches(matchesData.matches || []);
+
+      // Fetch gears and matches (non-critical)
+      try {
+        const gearsData = await apiRequest(`/public/gears/${id}`);
+        setGears(gearsData.gears || []);
+      } catch (e) {
+        console.warn("Failed to load gears", e);
+        setGears([]);
+      }
+
+      try {
+        const matchesData = await apiRequest(`/public/matches/${id}`);
+        setMatches(matchesData.matches || []);
+      } catch (e) {
+        console.warn("Failed to load matches", e);
+        setMatches([]);
+      }
+
     } catch (err: any) {
       console.error("Failed to fetch profile", err);
       setError("Failed to load profile. User might not exist.");

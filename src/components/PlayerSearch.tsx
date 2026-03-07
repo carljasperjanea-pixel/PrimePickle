@@ -18,16 +18,21 @@ export default function PlayerSearch() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleSearch = async () => {
     if (!query || query.length < 2) return;
     setLoading(true);
+    setError('');
     try {
       const data = await apiRequest(`/players/search?q=${encodeURIComponent(query)}`);
       setResults(data.players || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Search error:', error);
+      // Extract error message from API response if available
+      const errorMessage = error.message || 'Failed to search players. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -92,7 +97,10 @@ export default function PlayerSearch() {
                 </div>
               </div>
             ))}
-            {results.length === 0 && query.length >= 2 && !loading && (
+            {error && (
+              <div className="text-center text-red-500 text-sm py-2">{error}</div>
+            )}
+            {results.length === 0 && query.length >= 2 && !loading && !error && (
               <div className="text-center text-gray-500 text-sm py-4">No players found</div>
             )}
             {query.length < 2 && (

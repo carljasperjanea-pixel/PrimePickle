@@ -425,9 +425,13 @@ router.get('/players/search', authenticateToken, async (req: any, res) => {
     if (error) throw error;
 
     res.json({ players });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Search players error:', error);
-    res.status(500).json({ error: 'Failed to search players' });
+    res.status(500).json({ 
+        error: 'Failed to search players',
+        details: error.message || error.toString(),
+        hint: error.hint
+    });
   }
 });
 
