@@ -435,6 +435,30 @@ router.get('/players/search', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Get All Users (Admin Directory)
+router.get('/admin/users', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin') {
+    return res.sendStatus(403);
+  }
+
+  try {
+    const { data: users, error } = await supabase
+      .from('profiles')
+      .select('id, email, display_name, full_name, role, mmr, games_played, created_at, behavior_score')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ users });
+  } catch (error: any) {
+    console.error('Fetch all users error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch users',
+      details: error.message 
+    });
+  }
+});
+
 // --- Lobby Routes ---
 
 // Create Lobby (Admin only)

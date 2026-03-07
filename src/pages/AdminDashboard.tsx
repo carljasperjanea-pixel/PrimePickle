@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom';
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [lobbies, setLobbies] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'lobbies' | 'users'>('lobbies');
   const [qrLobby, setQrLobby] = useState<any>(null); // Lobby to show QR for
   const navigate = useNavigate();
 
@@ -19,6 +21,7 @@ export default function AdminDashboard() {
       else {
         setUser(u);
         fetchLobbies();
+        fetchUsers();
       }
     });
   }, []);
@@ -27,6 +30,15 @@ export default function AdminDashboard() {
     try {
       const data = await apiRequest('/lobbies');
       setLobbies(data.lobbies);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const data = await apiRequest('/admin/users');
+      setUsers(data.users);
     } catch (e) {
       console.error(e);
     }
@@ -127,32 +139,116 @@ export default function AdminDashboard() {
           />
         </div>
 
-        {/* Action Bar */}
-        <div>
-          <Button 
-            onClick={createLobby} 
-            disabled={isCreating}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-full px-6 shadow-md transition-all hover:shadow-lg"
-          >
-            {isCreating ? <Activity className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-            {isCreating ? 'Creating...' : 'Open New Court / Lobby'}
-          </Button>
+        {/* Action Bar & Tabs */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex bg-white rounded-lg p-1 shadow-sm border">
+            <button
+              onClick={() => setActiveTab('lobbies')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'lobbies' 
+                  ? 'bg-emerald-100 text-emerald-800' 
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Lobby Management
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'users' 
+                  ? 'bg-emerald-100 text-emerald-800' 
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              User Directory
+            </button>
+          </div>
+
+          {activeTab === 'lobbies' && (
+            <Button 
+              onClick={createLobby} 
+              disabled={isCreating}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-full px-6 shadow-md transition-all hover:shadow-lg"
+            >
+              {isCreating ? <Activity className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+              {isCreating ? 'Creating...' : 'Open New Court / Lobby'}
+            </Button>
+          )}
         </div>
 
-        {/* Lobby Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {lobbies.filter(l => l.status !== 'completed').map((lobby, index) => (
-            <LobbyCard 
-              key={lobby.id} 
-              lobby={lobby} 
-              index={index} 
-              onViewQR={() => setQrLobby(lobby)}
-              onCompleteMatch={completeMatch}
-            />
-          ))}
-          
-          {/* Show completed matches section if needed, or just filter them out for now as per "Active Lobbies" focus */}
-        </div>
+        {/* Content */}
+        {activeTab === 'lobbies' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {lobbies.filter(l => l.status !== 'completed').map((lobby, index) => (
+              <LobbyCard 
+                key={lobby.id} 
+                lobby={lobby} 
+                index={index} 
+                onViewQR={() => setQrLobby(lobby)}
+                onCompleteMatch={completeMatch}
+              />
+            ))}
+            {lobbies.filter(l => l.status !== 'completed').length === 0 && (
+              <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed">
+                No active lobbies. Create one to get started.
+              </div>
+            )}
+          </div>
+        ) : (
+          <Card className="border shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-700 font-semibold border-b">
+                  <tr>
+                    <th className="p-4">User</th>
+                    <th className="p-4">Email</th>
+                    <th className="p-4">Role</th>
+                    <th className="p-4 text-right">MMR</th>
+                    <th className="p-4 text-right">Games</th>
+                    <th className="p-4 text-right">Behavior</th>
+                    <th className="p-4 text-right">Joined</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="p-4 font-medium text-gray-900">{u.display_name}</td>
+                      <td className="p-4 text-gray-600">{u.email}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right font-mono">{u.mmr}</td>
+                      <td className="p-4 text-right font-mono">{u.games_played}</td>
+                      <td className="p-4 text-right">
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                          (u.behavior_score || 100) >= 90 ? 'text-green-600 bg-green-50' :
+                          (u.behavior_score || 100) >= 70 ? 'text-yellow-600 bg-yellow-50' :
+                          'text-red-600 bg-red-50'
+                        }`}>
+                          {u.behavior_score || 100}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right text-gray-500">
+                        {new Date(u.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                  {users.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-gray-500">
+                        No users found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </main>
 
       {/* QR Code Modal */}
