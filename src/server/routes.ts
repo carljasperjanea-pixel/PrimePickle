@@ -243,6 +243,90 @@ router.get('/public/profile/:id', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Get Public Gears
+router.get('/public/gears/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const { data: gears, error } = await supabase
+      .from('player_gears')
+      .select('*')
+      .eq('player_id', req.params.id)
+      .order('is_primary', { ascending: false });
+
+    if (error) throw error;
+    res.json({ gears });
+  } catch (error) {
+    console.error('Public gears fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch gears' });
+  }
+});
+
+// Get Public Matches
+router.get('/public/matches/:id', authenticateToken, async (req: any, res) => {
+  try {
+    // 1. Get all lobby_ids this user has played in
+    const { data: userLobbies, error: ulError } = await supabase
+      .from('lobby_players')
+      .select('lobby_id')
+      .eq('profile_id', req.params.id);
+      
+    if (ulError) throw ulError;
+    
+    const lobbyIds = userLobbies.map((ul: any) => ul.lobby_id);
+    
+    if (lobbyIds.length === 0) {
+        return res.json({ matches: [] });
+    }
+
+    // 2. Get matches for these lobbies
+    const { data: matches, error: mError } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        lobbies!inner (
+          id,
+          created_at
+        )
+      `)
+      .in('lobby_id', lobbyIds)
+      .order('created_at', { ascending: false })
+      .limit(10); // Limit to last 10 matches
+
+    if (mError) throw mError;
+
+    // 3. For each match, we need to know the result for THIS user.
+    // We need to know which team they were on in that lobby.
+    // We can fetch that info separately or try to join it.
+    // Let's fetch the user's team for these lobbies.
+    const { data: userTeams, error: utError } = await supabase
+        .from('lobby_players')
+        .select('lobby_id, team')
+        .eq('profile_id', req.params.id)
+        .in('lobby_id', matches.map((m: any) => m.lobby_id));
+
+    if (utError) throw utError;
+
+    const teamMap = new Map(userTeams.map((ut: any) => [ut.lobby_id, ut.team]));
+
+    const processedMatches = matches.map((m: any) => {
+        const userTeam = teamMap.get(m.lobby_id);
+        const isWin = m.winner_team === userTeam;
+        
+        return {
+            id: m.id,
+            date: m.created_at,
+            score: m.score,
+            result: isWin ? 'Win' : 'Loss',
+            mmr_delta: isWin ? m.mmr_delta : -(m.mmr_delta || 0)
+        };
+    });
+
+    res.json({ matches: processedMatches });
+  } catch (error) {
+    console.error('Public matches fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+});
+
 // Upload User Avatar
 router.post('/user/avatar', authenticateToken, upload.single('avatar'), async (req: any, res) => {
   if (!req.file) {
