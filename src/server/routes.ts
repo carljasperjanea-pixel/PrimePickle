@@ -324,6 +324,29 @@ router.post('/user/avatar', authenticateToken, upload.single('avatar'), async (r
   }
 });
 
+// Search Players
+router.get('/players/search', authenticateToken, async (req: any, res) => {
+  const { q } = req.query;
+  if (!q || typeof q !== 'string' || q.length < 2) {
+    return res.json({ players: [] });
+  }
+
+  try {
+    const { data: players, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url, mmr, role')
+      .ilike('display_name', `%${q}%`)
+      .limit(20);
+
+    if (error) throw error;
+
+    res.json({ players });
+  } catch (error) {
+    console.error('Search players error:', error);
+    res.status(500).json({ error: 'Failed to search players' });
+  }
+});
+
 // --- Lobby Routes ---
 
 // Create Lobby (Admin only)

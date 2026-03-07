@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
 import RatingPrompt from '@/components/RatingPrompt';
+import PlayerSearch from '@/components/PlayerSearch';
 
 export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -398,6 +399,7 @@ export default function PlayerDashboard() {
         
         {/* Left Sidebar: Profile */}
         <div className="lg:col-span-1 space-y-6">
+          <PlayerSearch />
           <Card className="border-none shadow-md overflow-hidden bg-white">
             <CardContent className="p-6 relative">
               <div className="absolute top-6 right-6">
