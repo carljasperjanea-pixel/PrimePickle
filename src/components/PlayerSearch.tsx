@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 
 export default function PlayerSearch() {
@@ -51,9 +52,12 @@ export default function PlayerSearch() {
           Search players...
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px]" aria-describedby="search-description">
         <DialogHeader>
           <DialogTitle>Search Players</DialogTitle>
+          <DialogDescription id="search-description" className="sr-only">
+            Search for players by name to view their profiles.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
