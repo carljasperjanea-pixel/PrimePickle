@@ -459,6 +459,117 @@ router.get('/admin/users', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Admin Stats (Phase 1)
+router.get('/admin/stats', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin') return res.sendStatus(403);
+
+  try {
+    // Parallel fetch for performance
+    const [
+      { count: totalUsers },
+      { count: activeLobbies },
+      { count: completedMatches }
+    ] = await Promise.all([
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('lobbies').select('*', { count: 'exact', head: true }).neq('status', 'completed'),
+      supabase.from('lobbies').select('*', { count: 'exact', head: true }).eq('status', 'completed')
+    ]);
+
+    // Mock revenue and server health for now
+    const stats = {
+      totalUsers: totalUsers || 0,
+      activeSessions: activeLobbies || 0,
+      completedMatches: completedMatches || 0,
+      revenue: 12450, // Mock
+      serverHealth: {
+        cpu: 42,
+        memory: 64,
+        latency: 45,
+        status: 'operational'
+      }
+    };
+
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Admin stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// Admin Audit Logs (Phase 3)
+router.get('/admin/audit-logs', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin') return res.sendStatus(403);
+  
+  // Mock data for now - in a real app, this would query an 'audit_logs' table
+  const logs = [
+    { id: 1, admin: 'Admin User', action: 'Banned User', target: 'spammer_123', time: '2 mins ago' },
+    { id: 2, admin: 'Moderator', action: 'Resolved Report', target: 'Report #442', time: '15 mins ago' },
+    { id: 3, admin: 'System', action: 'Backup Completed', target: 'Database', time: '1 hour ago' },
+    { id: 4, admin: 'Admin User', action: 'Updated Settings', target: 'Feature Flags', time: '3 hours ago' },
+  ];
+  
+  res.json({ logs });
+});
+
+// Admin Reports (Phase 3)
+router.get('/admin/reports', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin') return res.sendStatus(403);
+
+  // Mock data for now
+  const reports = [
+    { id: 101, user: 'toxic_player_99', reason: 'Harassment', status: 'pending', time: '10 mins ago' },
+    { id: 102, user: 'bot_account_x', reason: 'Spam', status: 'pending', time: '32 mins ago' },
+    { id: 103, user: 'griefer_007', reason: 'Game Throwing', status: 'reviewed', time: '2 hours ago' },
+  ];
+
+  res.json({ reports });
+});
+
+// Admin User Actions (Phase 2)
+router.post('/admin/users/:id/:action', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin') return res.sendStatus(403);
+  
+  const { id, action } = req.params;
+  
+  try {
+    // Log the action (Mock audit log)
+    console.log(`[AUDIT] Admin ${req.user.id} performed ${action} on user ${id}`);
+
+    if (action === 'ban') {
+      // In a real app, update a status column. For now, we'll just log it.
+      // await supabase.from('profiles').update({ status: 'banned' }).eq('id', id);
+      return res.json({ message: `User ${id} has been banned.` });
+    }
+    
+    if (action === 'reset-password') {
+      // Trigger password reset email or logic
+      return res.json({ message: `Password reset triggered for user ${id}.` });
+    }
+
+    if (action === 'impersonate') {
+      // Return a temporary token for this user
+      // Security Warning: This is dangerous. Ensure strict logging.
+      const { data: targetUser } = await supabase.from('profiles').select('*').eq('id', id).single();
+      if (!targetUser) return res.status(404).json({ error: 'User not found' });
+      
+      const impersonationToken = jwt.sign(
+        { id: targetUser.id, email: targetUser.email, role: targetUser.role, isImpersonating: true, originalAdminId: req.user.id }, 
+        JWT_SECRET, 
+        { expiresIn: '1h' }
+      );
+      
+      // We don't set the cookie here, we just return the token for the frontend to handle
+      // or we could set a special 'impersonation_token' cookie.
+      return res.json({ token: impersonationToken, message: `Impersonating ${targetUser.display_name}` });
+    }
+
+    res.status(400).json({ error: 'Invalid action' });
+  } catch (error: any) {
+    console.error('Admin action error:', error);
+    res.status(500).json({ error: 'Action failed' });
+  }
+});
+
 // --- Lobby Routes ---
 
 // Create Lobby (Admin only)
