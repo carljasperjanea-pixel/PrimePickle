@@ -161,19 +161,20 @@ export default function PlayerDashboard() {
       const data = await apiRequest('/lobbies/active');
       if (data.lobby) {
         setCurrentLobby(data.lobby);
+        if (data.players) {
+          setActiveLobbyPlayers(data.players);
+        } else {
+          setActiveLobbyPlayers([]);
+        }
       } else {
         setCurrentLobby(null);
-      }
-      
-      if (data.players) {
-        setActiveLobbyPlayers(data.players);
-      } else {
         setActiveLobbyPlayers([]);
       }
     } catch (e) {
       console.error("Failed to fetch active lobby players", e);
-      setActiveLobbyPlayers([]);
-      setCurrentLobby(null);
+      // Do not clear currentLobby on error to prevent unmounting Scorer
+      // setActiveLobbyPlayers([]); 
+      // setCurrentLobby(null);
     }
   };
 

@@ -233,6 +233,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
   // Render Setup Screen
   if (state.status === 'setup') {
+    if (!state.settings) return <div>Loading settings...</div>;
     return (
       <div className={cn("bg-gray-50 flex items-center justify-center p-4 font-sans", onMatchComplete ? "h-full" : "min-h-[100dvh]")}>
         <div className="w-full max-w-lg md:max-w-2xl bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
@@ -374,6 +375,8 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
       </div>
     );
   }
+
+  if (!state.settings) return <div>Loading game state...</div>;
 
   return (
     <div className={cn("bg-gray-50 flex flex-col w-full md:max-w-5xl mx-auto shadow-2xl overflow-hidden relative font-sans transition-all", onMatchComplete ? "h-full rounded-xl border" : "min-h-[100dvh]")}>
