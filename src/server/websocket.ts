@@ -21,7 +21,17 @@ interface Lobby {
 const lobbies = new Map<string, Lobby>();
 
 export function setupWebSocket(server: Server) {
-  const wss = new WebSocketServer({ server, path: '/game-ws' });
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (request, socket, head) => {
+    console.log(`[WS] Upgrade request for ${request.url}`);
+    
+    if (request.url === '/game-ws') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+  });
 
   wss.on('connection', (ws, req) => {
     let currentLobbyId: string | null = null;
