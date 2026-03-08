@@ -20,8 +20,10 @@ import {
   Eye,
   Ban,
   RefreshCw,
-  MessageSquare
+  MessageSquare,
+  Gamepad2
 } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { 
   LineChart, 
   Line, 
@@ -42,9 +44,17 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 // --- Types ---
-type Tab = 'overview' | 'users' | 'moderation' | 'settings';
+type Tab = 'overview' | 'users' | 'moderation' | 'settings' | 'lobbies';
 
 // --- Mock Data for Analytics ---
 const growthData = [
@@ -143,6 +153,13 @@ export default function AdminDashboard() {
             collapsed={!isSidebarOpen}
           />
           <SidebarItem 
+            icon={<Gamepad2 size={20} />} 
+            label="Lobbies" 
+            active={activeTab === 'lobbies'} 
+            onClick={() => setActiveTab('lobbies')}
+            collapsed={!isSidebarOpen}
+          />
+          <SidebarItem 
             icon={<ShieldAlert size={20} />} 
             label="Moderation" 
             active={activeTab === 'moderation'} 
@@ -188,6 +205,7 @@ export default function AdminDashboard() {
             <h1 className="text-xl font-semibold text-gray-800">
               {activeTab === 'overview' && 'Dashboard Overview'}
               {activeTab === 'users' && 'User Management'}
+              {activeTab === 'lobbies' && 'Lobby Management'}
               {activeTab === 'moderation' && 'Moderation Queue'}
               {activeTab === 'settings' && 'System Settings'}
             </h1>
@@ -223,6 +241,7 @@ export default function AdminDashboard() {
               >
                 {activeTab === 'overview' && <OverviewTab />}
                 {activeTab === 'users' && <UserManagementTab />}
+                {activeTab === 'lobbies' && <LobbiesTab />}
                 {activeTab === 'moderation' && <ModerationTab />}
                 {activeTab === 'settings' && <SettingsTab />}
               </motion.div>
@@ -869,6 +888,162 @@ function SettingsTab() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// --- Phase 5: Lobby Management ---
+function LobbiesTab() {
+  const [lobbies, setLobbies] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createdLobby, setCreatedLobby] = useState<any>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    fetchLobbies();
+  }, []);
+
+  const fetchLobbies = async () => {
+    try {
+      const data = await apiRequest('/lobbies');
+      setLobbies(data.lobbies || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateLobby = async () => {
+    try {
+      const lobby = await apiRequest('/lobbies', 'POST');
+      setCreatedLobby(lobby);
+      setIsDialogOpen(true);
+      fetchLobbies();
+    } catch (e: any) {
+      alert(`Failed to create lobby: ${e.message}`);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-lg font-medium text-gray-900">Active Game Lobbies</h2>
+          <p className="text-sm text-gray-500">Manage and monitor ongoing game sessions</p>
+        </div>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={handleCreateLobby} className="bg-emerald-600 hover:bg-emerald-700">
+              <Gamepad2 className="mr-2 h-4 w-4" /> Create New Lobby
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Lobby Created Successfully</DialogTitle>
+              <DialogDescription>
+                Share this QR code with players to let them join the game.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col items-center justify-center p-6 space-y-4">
+              <div className="p-4 bg-white rounded-xl shadow-sm border">
+                {createdLobby && (
+                  <QRCodeCanvas 
+                    value={JSON.stringify({ 
+                      type: 'join_lobby', 
+                      lobbyId: createdLobby.id, 
+                      payload: createdLobby.qr_payload 
+                    })} 
+                    size={200}
+                    level="H"
+                  />
+                )}
+              </div>
+              <div className="text-center space-y-1">
+                <p className="text-sm font-medium text-gray-900">Lobby ID</p>
+                <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600 font-mono">
+                  {createdLobby?.id}
+                </code>
+              </div>
+              <div className="w-full pt-4">
+                <Button className="w-full" onClick={() => setIsDialogOpen(false)}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading ? (
+          <div className="col-span-full text-center py-12 text-gray-500">Loading lobbies...</div>
+        ) : lobbies.length === 0 ? (
+          <div className="col-span-full text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
+            <Gamepad2 className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+            <h3 className="text-lg font-medium text-gray-900">No Active Lobbies</h3>
+            <p className="text-gray-500 mb-4">Create a lobby to start a new game session</p>
+            <Button onClick={handleCreateLobby} variant="outline">
+              Create First Lobby
+            </Button>
+          </div>
+        ) : (
+          lobbies.map((lobby) => (
+            <Card key={lobby.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-base font-medium">Lobby #{lobby.id.slice(0, 8)}</CardTitle>
+                    <CardDescription className="text-xs font-mono mt-1">
+                      {new Date(lobby.created_at).toLocaleString()}
+                    </CardDescription>
+                  </div>
+                  <Badge variant={lobby.status === 'open' ? 'default' : 'secondary'} 
+                    className={lobby.status === 'open' ? 'bg-green-100 text-green-700 hover:bg-green-200' : ''}>
+                    {lobby.status}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-gray-500">Players</span>
+                      <span className="font-medium">{lobby.player_count || 0} / 10</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
+                        style={{ width: `${((lobby.player_count || 0) / 10) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex -space-x-2 overflow-hidden py-1 min-h-[32px]">
+                    {lobby.players && lobby.players.slice(0, 5).map((player: any) => (
+                      <Avatar key={player.id} className="inline-block h-8 w-8 ring-2 ring-white">
+                        <AvatarImage src={player.avatar_url} />
+                        <AvatarFallback>{player.display_name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {lobby.player_count > 5 && (
+                      <div className="flex items-center justify-center h-8 w-8 rounded-full ring-2 ring-white bg-gray-100 text-xs font-medium text-gray-500">
+                        +{lobby.player_count - 5}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex gap-2">
+                    <Button variant="outline" size="sm" className="w-full text-xs">
+                      View Details
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   );
 }
