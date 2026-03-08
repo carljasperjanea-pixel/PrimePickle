@@ -243,90 +243,6 @@ router.get('/public/profile/:id', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Get Public Gears
-router.get('/public/gears/:id', authenticateToken, async (req: any, res) => {
-  try {
-    const { data: gears, error } = await supabase
-      .from('player_gears')
-      .select('*')
-      .eq('player_id', req.params.id)
-      .order('is_primary', { ascending: false });
-
-    if (error) throw error;
-    res.json({ gears });
-  } catch (error) {
-    console.error('Public gears fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch gears' });
-  }
-});
-
-// Get Public Matches
-router.get('/public/matches/:id', authenticateToken, async (req: any, res) => {
-  try {
-    // 1. Get all lobby_ids this user has played in
-    const { data: userLobbies, error: ulError } = await supabase
-      .from('lobby_players')
-      .select('lobby_id')
-      .eq('profile_id', req.params.id);
-      
-    if (ulError) throw ulError;
-    
-    const lobbyIds = userLobbies.map((ul: any) => ul.lobby_id);
-    
-    if (lobbyIds.length === 0) {
-        return res.json({ matches: [] });
-    }
-
-    // 2. Get matches for these lobbies
-    const { data: matches, error: mError } = await supabase
-      .from('matches')
-      .select(`
-        *,
-        lobbies!inner (
-          id,
-          created_at
-        )
-      `)
-      .in('lobby_id', lobbyIds)
-      .order('created_at', { ascending: false })
-      .limit(10); // Limit to last 10 matches
-
-    if (mError) throw mError;
-
-    // 3. For each match, we need to know the result for THIS user.
-    // We need to know which team they were on in that lobby.
-    // We can fetch that info separately or try to join it.
-    // Let's fetch the user's team for these lobbies.
-    const { data: userTeams, error: utError } = await supabase
-        .from('lobby_players')
-        .select('lobby_id, team')
-        .eq('profile_id', req.params.id)
-        .in('lobby_id', matches.map((m: any) => m.lobby_id));
-
-    if (utError) throw utError;
-
-    const teamMap = new Map(userTeams.map((ut: any) => [ut.lobby_id, ut.team]));
-
-    const processedMatches = matches.map((m: any) => {
-        const userTeam = teamMap.get(m.lobby_id);
-        const isWin = m.winner_team === userTeam;
-        
-        return {
-            id: m.id,
-            date: m.created_at,
-            score: m.score,
-            result: isWin ? 'Win' : 'Loss',
-            mmr_delta: isWin ? m.mmr_delta : -(m.mmr_delta || 0)
-        };
-    });
-
-    res.json({ matches: processedMatches });
-  } catch (error) {
-    console.error('Public matches fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch matches' });
-  }
-});
-
 // Upload User Avatar
 router.post('/user/avatar', authenticateToken, upload.single('avatar'), async (req: any, res) => {
   if (!req.file) {
@@ -405,168 +321,6 @@ router.post('/user/avatar', authenticateToken, upload.single('avatar'), async (r
   } catch (error: any) {
     console.error('Avatar upload error:', error);
     res.status(500).json({ error: 'Failed to upload avatar', details: error.message });
-  }
-});
-
-// Search Players
-router.get('/players/search', authenticateToken, async (req: any, res) => {
-  const { q } = req.query;
-  if (!q || typeof q !== 'string' || q.length < 2) {
-    return res.json({ players: [] });
-  }
-
-  try {
-    const { data: players, error } = await supabase
-      .from('profiles')
-      .select('id, display_name, avatar_url, mmr, role')
-      .ilike('display_name', `%${q}%`)
-      .limit(20);
-
-    if (error) throw error;
-
-    res.json({ players });
-  } catch (error: any) {
-    console.error('Search players error:', error);
-    res.status(500).json({ 
-        error: 'Failed to search players',
-        details: error.message || error.toString(),
-        hint: error.hint
-    });
-  }
-});
-
-// Get All Users (Admin Directory)
-router.get('/admin/users', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'admin') {
-    return res.sendStatus(403);
-  }
-
-  try {
-    const { data: users, error } = await supabase
-      .from('profiles')
-      .select('id, email, display_name, full_name, role, mmr, games_played, created_at, behavior_score')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    res.json({ users });
-  } catch (error: any) {
-    console.error('Fetch all users error:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch users',
-      details: error.message 
-    });
-  }
-});
-
-// Admin Stats (Phase 1)
-router.get('/admin/stats', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.sendStatus(403);
-
-  try {
-    // Parallel fetch for performance
-    const [
-      { count: totalUsers },
-      { count: activeLobbies },
-      { count: completedMatches }
-    ] = await Promise.all([
-      supabase.from('profiles').select('*', { count: 'exact', head: true }),
-      supabase.from('lobbies').select('*', { count: 'exact', head: true }).neq('status', 'completed'),
-      supabase.from('lobbies').select('*', { count: 'exact', head: true }).eq('status', 'completed')
-    ]);
-
-    // Mock revenue and server health for now
-    const stats = {
-      totalUsers: totalUsers || 0,
-      activeSessions: activeLobbies || 0,
-      completedMatches: completedMatches || 0,
-      revenue: 12450, // Mock
-      serverHealth: {
-        cpu: 42,
-        memory: 64,
-        latency: 45,
-        status: 'operational'
-      }
-    };
-
-    res.json(stats);
-  } catch (error: any) {
-    console.error('Admin stats error:', error);
-    res.status(500).json({ error: 'Failed to fetch stats' });
-  }
-});
-
-// Admin Audit Logs (Phase 3)
-router.get('/admin/audit-logs', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.sendStatus(403);
-  
-  // Mock data for now - in a real app, this would query an 'audit_logs' table
-  const logs = [
-    { id: 1, admin: 'Admin User', action: 'Banned User', target: 'spammer_123', time: '2 mins ago' },
-    { id: 2, admin: 'Moderator', action: 'Resolved Report', target: 'Report #442', time: '15 mins ago' },
-    { id: 3, admin: 'System', action: 'Backup Completed', target: 'Database', time: '1 hour ago' },
-    { id: 4, admin: 'Admin User', action: 'Updated Settings', target: 'Feature Flags', time: '3 hours ago' },
-  ];
-  
-  res.json({ logs });
-});
-
-// Admin Reports (Phase 3)
-router.get('/admin/reports', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.sendStatus(403);
-
-  // Mock data for now
-  const reports = [
-    { id: 101, user: 'toxic_player_99', reason: 'Harassment', status: 'pending', time: '10 mins ago' },
-    { id: 102, user: 'bot_account_x', reason: 'Spam', status: 'pending', time: '32 mins ago' },
-    { id: 103, user: 'griefer_007', reason: 'Game Throwing', status: 'reviewed', time: '2 hours ago' },
-  ];
-
-  res.json({ reports });
-});
-
-// Admin User Actions (Phase 2)
-router.post('/admin/users/:id/:action', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.sendStatus(403);
-  
-  const { id, action } = req.params;
-  
-  try {
-    // Log the action (Mock audit log)
-    console.log(`[AUDIT] Admin ${req.user.id} performed ${action} on user ${id}`);
-
-    if (action === 'ban') {
-      // In a real app, update a status column. For now, we'll just log it.
-      // await supabase.from('profiles').update({ status: 'banned' }).eq('id', id);
-      return res.json({ message: `User ${id} has been banned.` });
-    }
-    
-    if (action === 'reset-password') {
-      // Trigger password reset email or logic
-      return res.json({ message: `Password reset triggered for user ${id}.` });
-    }
-
-    if (action === 'impersonate') {
-      // Return a temporary token for this user
-      // Security Warning: This is dangerous. Ensure strict logging.
-      const { data: targetUser } = await supabase.from('profiles').select('*').eq('id', id).single();
-      if (!targetUser) return res.status(404).json({ error: 'User not found' });
-      
-      const impersonationToken = jwt.sign(
-        { id: targetUser.id, email: targetUser.email, role: targetUser.role, isImpersonating: true, originalAdminId: req.user.id }, 
-        JWT_SECRET, 
-        { expiresIn: '1h' }
-      );
-      
-      // We don't set the cookie here, we just return the token for the frontend to handle
-      // or we could set a special 'impersonation_token' cookie.
-      return res.json({ token: impersonationToken, message: `Impersonating ${targetUser.display_name}` });
-    }
-
-    res.status(400).json({ error: 'Invalid action' });
-  } catch (error: any) {
-    console.error('Admin action error:', error);
-    res.status(500).json({ error: 'Action failed' });
   }
 });
 
@@ -907,26 +661,26 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Join Lobby via QR Scan or Manual Code
+// Join Lobby via QR Scan
 router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
   let { qr_payload } = req.body;
   if (typeof qr_payload === 'string') {
     qr_payload = qr_payload.trim().replace(/^"|"$/g, '');
   }
-  console.log(`[DEBUG] /lobbies/join called. User: ${req.user.id}, Input: "${qr_payload}"`);
+  console.log(`[DEBUG] /lobbies/join called. User: ${req.user.id}, Payload: "${qr_payload}"`);
   
   try {
-    // Find lobby by QR payload OR ID (to support manual entry of Lobby ID)
+    // Find lobby by QR payload
     const { data: lobby, error: lobbyError } = await supabase
       .from('lobbies')
       .select('*')
-      .or(`qr_payload.eq.${qr_payload},id.eq.${qr_payload}`)
+      .eq('qr_payload', qr_payload)
       .single();
     
     console.log('[DEBUG] Lobby lookup result:', { lobby, error: lobbyError });
     
     if (lobbyError || !lobby) {
-      return res.status(404).json({ error: 'Invalid QR Code or Lobby ID' });
+      return res.status(404).json({ error: 'Invalid QR Code' });
     }
 
     // Check if player is already in ANY active lobby (status != completed)
@@ -1606,64 +1360,6 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
       } catch (error) {
         console.error('Set primary gear error:', error);
         res.status(500).json({ error: 'Failed to set primary gear' });
-      }
-    });
-
-    // --- Admin: Additional Routes ---
-
-    // Toggle Maintenance Mode
-    router.post('/admin/maintenance', authenticateToken, async (req: any, res) => {
-      if (req.user.role !== 'admin') return res.sendStatus(403);
-      const { enabled } = req.body;
-      // In a real app, store this in a 'system_settings' table or Redis
-      console.log(`[ADMIN] Maintenance mode set to: ${enabled}`);
-      res.json({ message: `Maintenance mode ${enabled ? 'enabled' : 'disabled'}`, enabled });
-    });
-
-    // Flush Cache
-    router.post('/admin/cache/flush', authenticateToken, async (req: any, res) => {
-      if (req.user.role !== 'admin') return res.sendStatus(403);
-      // In a real app, clear Redis or memory cache
-      console.log('[ADMIN] Cache flushed by user', req.user.id);
-      res.json({ message: 'System cache flushed successfully' });
-    });
-
-    // Send Broadcast
-    router.post('/admin/broadcast', authenticateToken, async (req: any, res) => {
-      if (req.user.role !== 'admin') return res.sendStatus(403);
-      const { type, audience, content } = req.body;
-      
-      if (!content) return res.status(400).json({ error: 'Message content is required' });
-
-      // In a real app, create a notification record or trigger push service
-      console.log(`[ADMIN] Broadcast sent. Type: ${type}, Audience: ${audience}, Content: ${content}`);
-      
-      // Mock success
-      res.json({ message: `Broadcast sent to ${audience} via ${type}` });
-    });
-
-    // Admin Report Actions
-    router.post('/admin/reports/:id/:action', authenticateToken, async (req: any, res) => {
-      if (req.user.role !== 'admin') return res.sendStatus(403);
-      const { id, action } = req.params; // action: 'approve' | 'ban'
-
-      try {
-        console.log(`[ADMIN] Report ${id} action: ${action}`);
-        
-        // In a real app, update 'reports' table status
-        // await supabase.from('reports').update({ status: 'resolved', resolution: action }).eq('id', id);
-
-        if (action === 'ban') {
-           // Also ban the user associated with the report
-           // const { data: report } = await supabase.from('reports').select('reported_user_id').eq('id', id).single();
-           // await supabase.from('profiles').update({ status: 'banned' }).eq('id', report.reported_user_id);
-           return res.json({ message: `Report ${id} resolved and user banned.` });
-        }
-
-        res.json({ message: `Report ${id} marked as ${action === 'approve' ? 'approved/resolved' : action}.` });
-      } catch (error) {
-        console.error('Report action error:', error);
-        res.status(500).json({ error: 'Failed to process report action' });
       }
     });
 
