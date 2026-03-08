@@ -36,6 +36,9 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
   useEffect(() => {
     if (!lobbyId) return;
 
+    // Fetch lobby details immediately on mount to populate UI
+    fetchLobbyDetails();
+
     let ws: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout;
 
@@ -245,12 +248,6 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
             <div className="text-right">
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Pickleball Scorer</h1>
               <p className="text-gray-400 mt-2 text-sm md:text-base">Doubles Match Setup</p>
-              {!isConnected && (
-                <div className="mt-2 flex items-center justify-end gap-2">
-                  <span className="text-xs text-yellow-400 font-bold animate-pulse">Connecting...</span>
-                  <button onClick={() => window.location.reload()} className="text-[10px] bg-white/10 px-2 py-0.5 rounded hover:bg-white/20 text-white">Reload</button>
-                </div>
-              )}
             </div>
           </div>
           
@@ -343,10 +340,9 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
             <button
               onClick={startGame}
-              disabled={!isConnected}
               className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] text-lg"
             >
-              {isConnected ? 'Start Match' : 'Connecting...'}
+              Start Match
             </button>
             
             <button
@@ -386,17 +382,6 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
         </button>
         <div className="font-mono font-bold text-gray-900 flex flex-col items-center">
           <span className="text-sm md:text-base">GOAL: {state.settings.matchPoint}</span>
-          {!isConnected && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-red-500 animate-pulse">Disconnected</span>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded hover:bg-red-200"
-              >
-                Reload
-              </button>
-            </div>
-          )}
         </div>
         <button 
           onClick={onUndo} 
