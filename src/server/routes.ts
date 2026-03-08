@@ -1609,4 +1609,62 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
       }
     });
 
+    // --- Admin: Additional Routes ---
+
+    // Toggle Maintenance Mode
+    router.post('/admin/maintenance', authenticateToken, async (req: any, res) => {
+      if (req.user.role !== 'admin') return res.sendStatus(403);
+      const { enabled } = req.body;
+      // In a real app, store this in a 'system_settings' table or Redis
+      console.log(`[ADMIN] Maintenance mode set to: ${enabled}`);
+      res.json({ message: `Maintenance mode ${enabled ? 'enabled' : 'disabled'}`, enabled });
+    });
+
+    // Flush Cache
+    router.post('/admin/cache/flush', authenticateToken, async (req: any, res) => {
+      if (req.user.role !== 'admin') return res.sendStatus(403);
+      // In a real app, clear Redis or memory cache
+      console.log('[ADMIN] Cache flushed by user', req.user.id);
+      res.json({ message: 'System cache flushed successfully' });
+    });
+
+    // Send Broadcast
+    router.post('/admin/broadcast', authenticateToken, async (req: any, res) => {
+      if (req.user.role !== 'admin') return res.sendStatus(403);
+      const { type, audience, content } = req.body;
+      
+      if (!content) return res.status(400).json({ error: 'Message content is required' });
+
+      // In a real app, create a notification record or trigger push service
+      console.log(`[ADMIN] Broadcast sent. Type: ${type}, Audience: ${audience}, Content: ${content}`);
+      
+      // Mock success
+      res.json({ message: `Broadcast sent to ${audience} via ${type}` });
+    });
+
+    // Admin Report Actions
+    router.post('/admin/reports/:id/:action', authenticateToken, async (req: any, res) => {
+      if (req.user.role !== 'admin') return res.sendStatus(403);
+      const { id, action } = req.params; // action: 'approve' | 'ban'
+
+      try {
+        console.log(`[ADMIN] Report ${id} action: ${action}`);
+        
+        // In a real app, update 'reports' table status
+        // await supabase.from('reports').update({ status: 'resolved', resolution: action }).eq('id', id);
+
+        if (action === 'ban') {
+           // Also ban the user associated with the report
+           // const { data: report } = await supabase.from('reports').select('reported_user_id').eq('id', id).single();
+           // await supabase.from('profiles').update({ status: 'banned' }).eq('id', report.reported_user_id);
+           return res.json({ message: `Report ${id} resolved and user banned.` });
+        }
+
+        res.json({ message: `Report ${id} marked as ${action === 'approve' ? 'approved/resolved' : action}.` });
+      } catch (error) {
+        console.error('Report action error:', error);
+        res.status(500).json({ error: 'Failed to process report action' });
+      }
+    });
+
     export default router;

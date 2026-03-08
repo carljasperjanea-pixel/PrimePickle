@@ -75,6 +75,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [globalSearch, setGlobalSearch] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -84,6 +85,20 @@ export default function AdminDashboard() {
       else setUser(u);
     });
   }, []);
+
+  const handleGlobalSearch = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      // Redirect to User Management with search query
+      setActiveTab('users');
+      // We'll need to pass this search term down, but for now let's just switch tabs
+      // A better implementation would be to use a URL query param or context
+      console.log('Searching for:', globalSearch);
+    }
+  };
+
+  const handleNotificationClick = () => {
+    alert('No new notifications');
+  };
 
   if (!user) return <div className="flex h-screen items-center justify-center">Loading Admin Panel...</div>;
 
@@ -183,9 +198,12 @@ export default function AdminDashboard() {
               <Input 
                 placeholder="Global Search..." 
                 className="pl-9 w-64 bg-gray-50 border-gray-200 focus:bg-white transition-all" 
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+                onKeyDown={handleGlobalSearch}
               />
             </div>
-            <Button variant="ghost" size="icon" className="relative text-gray-500">
+            <Button variant="ghost" size="icon" className="relative text-gray-500" onClick={handleNotificationClick}>
               <Bell size={20} />
               <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border-2 border-white"></span>
             </Button>
@@ -433,6 +451,11 @@ function UserManagementTab() {
     }
   };
 
+  const filteredUsers = users.filter(u => 
+    u.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -565,6 +588,18 @@ function ModerationTab() {
     fetchData();
   }, []);
 
+  const handleReportAction = async (id: number, action: string) => {
+    if (!confirm(`Are you sure you want to ${action} this report?`)) return;
+    try {
+      const res = await apiRequest(`/admin/reports/${id}/${action}`, 'POST');
+      alert(res.message);
+      // Optimistically update UI
+      setReports(reports.filter(r => r.id !== id));
+    } catch (e: any) {
+      alert(`Action failed: ${e.message}`);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
@@ -598,10 +633,20 @@ function ModerationTab() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="text-green-600 hover:bg-green-50 border-green-200">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="text-green-600 hover:bg-green-50 border-green-200"
+                        onClick={() => handleReportAction(report.id, 'approve')}
+                      >
                         <CheckCircle size={14} className="mr-1" /> Approve
                       </Button>
-                      <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50 border-red-200">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="text-red-600 hover:bg-red-50 border-red-200"
+                        onClick={() => handleReportAction(report.id, 'ban')}
+                      >
                         <XCircle size={14} className="mr-1" /> Ban
                       </Button>
                     </div>
@@ -643,6 +688,47 @@ function ModerationTab() {
 
 // --- Phase 4: System Configuration ---
 function SettingsTab() {
+  const [broadcastType, setBroadcastType] = useState('in-app');
+  const [broadcastAudience, setBroadcastAudience] = useState('All Users');
+  const [broadcastContent, setBroadcastContent] = useState('');
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+
+  const handleMaintenanceToggle = async (checked: boolean) => {
+    if (checked && !confirm('Are you sure you want to enable Maintenance Mode? This will block all users.')) return;
+    try {
+      const res = await apiRequest('/admin/maintenance', 'POST', { enabled: checked });
+      setMaintenanceMode(checked);
+      alert(res.message);
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    }
+  };
+
+  const handleFlushCache = async () => {
+    if (!confirm('Are you sure you want to flush the system cache?')) return;
+    try {
+      const res = await apiRequest('/admin/cache/flush', 'POST');
+      alert(res.message);
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    }
+  };
+
+  const handleBroadcast = async () => {
+    if (!broadcastContent) return alert('Please enter a message');
+    try {
+      const res = await apiRequest('/admin/broadcast', 'POST', {
+        type: broadcastType,
+        audience: broadcastAudience,
+        content: broadcastContent
+      });
+      alert(res.message);
+      setBroadcastContent('');
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -691,14 +777,23 @@ function SettingsTab() {
                 </div>
                 <div className="text-sm text-red-600">Disable access for all non-admin users</div>
               </div>
-              <Switch className="data-[state=checked]:bg-red-600" />
+              <Switch 
+                className="data-[state=checked]:bg-red-600" 
+                checked={maintenanceMode}
+                onCheckedChange={handleMaintenanceToggle}
+              />
             </div>
             <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-red-100">
               <div className="space-y-0.5">
                 <div className="font-medium text-red-900">Flush Cache</div>
                 <div className="text-sm text-red-600">Clear all server-side caches immediately</div>
               </div>
-              <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={handleFlushCache}
+              >
                 Execute
               </Button>
             </div>
@@ -718,14 +813,36 @@ function SettingsTab() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Message Type</label>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1 bg-blue-50 text-blue-700 border-blue-200">In-App Banner</Button>
-                  <Button variant="ghost" className="flex-1">Push Notification</Button>
-                  <Button variant="ghost" className="flex-1">Email Blast</Button>
+                  <Button 
+                    variant={broadcastType === 'in-app' ? 'outline' : 'ghost'} 
+                    className={`flex-1 ${broadcastType === 'in-app' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}`}
+                    onClick={() => setBroadcastType('in-app')}
+                  >
+                    In-App Banner
+                  </Button>
+                  <Button 
+                    variant={broadcastType === 'push' ? 'outline' : 'ghost'} 
+                    className={`flex-1 ${broadcastType === 'push' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}`}
+                    onClick={() => setBroadcastType('push')}
+                  >
+                    Push Notification
+                  </Button>
+                  <Button 
+                    variant={broadcastType === 'email' ? 'outline' : 'ghost'} 
+                    className={`flex-1 ${broadcastType === 'email' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}`}
+                    onClick={() => setBroadcastType('email')}
+                  >
+                    Email Blast
+                  </Button>
                 </div>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Target Audience</label>
-                <select className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <select 
+                  className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={broadcastAudience}
+                  onChange={(e) => setBroadcastAudience(e.target.value)}
+                >
                   <option>All Users</option>
                   <option>Active in last 7 days</option>
                   <option>Premium Users</option>
@@ -737,10 +854,15 @@ function SettingsTab() {
               <textarea 
                 className="w-full min-h-[100px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="Enter your broadcast message here..."
+                value={broadcastContent}
+                onChange={(e) => setBroadcastContent(e.target.value)}
               ></textarea>
             </div>
             <div className="flex justify-end">
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleBroadcast}
+              >
                 <MessageSquare className="mr-2 h-4 w-4" /> Send Broadcast
               </Button>
             </div>
