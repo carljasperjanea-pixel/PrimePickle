@@ -185,7 +185,10 @@ export default function PlayerDashboard() {
       fetchActiveLobby(); // Refresh active lobby players
       setTimeout(() => setScanResult(null), 3000);
     } catch (err: any) {
-      setError(err.message);
+      console.error("Join error:", err);
+      // Show more detailed error for debugging
+      const payloadSnippet = qrPayload && typeof qrPayload === 'string' ? qrPayload.substring(0, 15) : 'invalid';
+      setError(`${err.message} (Payload: ${payloadSnippet}...)`);
       setTimeout(() => setError(''), 5000);
     }
   };
@@ -972,22 +975,40 @@ export default function PlayerDashboard() {
                         onScan={(result) => {
                           if (result && result[0]) {
                             setScanning(false);
-                            const rawValue = result[0].rawValue;
-                            // Clean up value: remove quotes if present, trim whitespace
-                            const cleanValue = rawValue.replace(/^"|"$/g, '').trim();
-                            console.log('Scanned QR:', cleanValue);
+                            // @ts-ignore - rawValue exists in the library but might be missing in types
+                            const rawValue = result[0].rawValue || result[0].text || '';
+                            console.log('Raw Scanned Value:', rawValue);
                             
-                            let payloadToSend = cleanValue;
+                            let payloadToSend = rawValue;
+                            
                             try {
-                              const parsed = JSON.parse(cleanValue);
-                              if (parsed && parsed.payload) {
-                                payloadToSend = parsed.payload;
-                              }
+                                // Strategy 1: Try parsing raw value directly
+                                // Handles: {"type":"...","payload":"..."}
+                                const parsed = JSON.parse(rawValue);
+                                if (parsed && parsed.payload) {
+                                    payloadToSend = parsed.payload;
+                                }
                             } catch (e) {
-                              // Not JSON, use raw value
-                              console.log('QR code is not JSON, using raw value');
+                                // Strategy 2: Try cleaning quotes and parsing
+                                // Handles: "{\"type\":\"...\",\"payload\":\"...\"}"
+                                const cleanValue = rawValue.replace(/^"|"$/g, '').trim();
+                                try {
+                                    const parsedClean = JSON.parse(cleanValue);
+                                    if (parsedClean && parsedClean.payload) {
+                                        payloadToSend = parsedClean.payload;
+                                    } else {
+                                        // Strategy 3: Use cleaned value (fallback for old UUID codes)
+                                        // Handles: "some-uuid-string"
+                                        payloadToSend = cleanValue;
+                                    }
+                                } catch (e2) {
+                                    // Strategy 4: Not JSON, use cleaned value
+                                    // Handles: some-uuid-string
+                                    payloadToSend = cleanValue;
+                                }
                             }
                             
+                            console.log('Final Payload to Send:', payloadToSend);
                             handleJoinLobby(payloadToSend);
                           }
                         }}

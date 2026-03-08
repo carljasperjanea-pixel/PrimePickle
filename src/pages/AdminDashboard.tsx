@@ -950,7 +950,7 @@ function LobbiesTab() {
             </DialogHeader>
             <div className="flex flex-col items-center justify-center p-6 space-y-4">
               <div className="p-4 bg-white rounded-xl shadow-sm border">
-                {createdLobby && (
+                {createdLobby && createdLobby.qr_payload && (
                   <QRCodeCanvas 
                     value={JSON.stringify({ 
                       type: 'join_lobby', 
@@ -960,6 +960,9 @@ function LobbiesTab() {
                     size={200}
                     level="H"
                   />
+                )}
+                {createdLobby && !createdLobby.qr_payload && (
+                    <div className="text-red-500 text-sm">Error: Missing QR Payload</div>
                 )}
               </div>
               <div className="text-center space-y-1">
@@ -989,15 +992,19 @@ function LobbiesTab() {
             {selectedLobby && (
               <div className="space-y-6">
                 <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border border-dashed">
-                  <QRCodeCanvas 
-                    value={JSON.stringify({ 
-                      type: 'join_lobby', 
-                      lobbyId: selectedLobby.id, 
-                      payload: selectedLobby.qr_payload 
-                    })} 
-                    size={160}
-                    level="H"
-                  />
+                  {selectedLobby.qr_payload ? (
+                    <QRCodeCanvas 
+                      value={JSON.stringify({ 
+                        type: 'join_lobby', 
+                        lobbyId: selectedLobby.id, 
+                        payload: selectedLobby.qr_payload 
+                      })} 
+                      size={160}
+                      level="H"
+                    />
+                  ) : (
+                    <div className="text-red-500 text-xs">Missing QR Payload</div>
+                  )}
                   <p className="text-xs text-gray-500 mt-2">Scan to Join</p>
                 </div>
 
