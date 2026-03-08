@@ -985,8 +985,13 @@ export default function PlayerDashboard() {
                                 // Strategy 1: Try parsing raw value directly
                                 // Handles: {"type":"...","payload":"..."}
                                 const parsed = JSON.parse(rawValue);
-                                if (parsed && parsed.payload) {
-                                    payloadToSend = parsed.payload;
+                                if (parsed) {
+                                    if (parsed.payload) {
+                                        payloadToSend = parsed.payload;
+                                    } else if (parsed.lobbyId) {
+                                        // Fallback to Lobby ID if payload is missing (supported by backend now)
+                                        payloadToSend = parsed.lobbyId;
+                                    }
                                 }
                             } catch (e) {
                                 // Strategy 2: Try cleaning quotes and parsing
@@ -994,12 +999,15 @@ export default function PlayerDashboard() {
                                 const cleanValue = rawValue.replace(/^"|"$/g, '').trim();
                                 try {
                                     const parsedClean = JSON.parse(cleanValue);
-                                    if (parsedClean && parsedClean.payload) {
-                                        payloadToSend = parsedClean.payload;
-                                    } else {
-                                        // Strategy 3: Use cleaned value (fallback for old UUID codes)
-                                        // Handles: "some-uuid-string"
-                                        payloadToSend = cleanValue;
+                                    if (parsedClean) {
+                                        if (parsedClean.payload) {
+                                            payloadToSend = parsedClean.payload;
+                                        } else if (parsedClean.lobbyId) {
+                                            payloadToSend = parsedClean.lobbyId;
+                                        } else {
+                                            // Strategy 3: Use cleaned value (fallback for old UUID codes)
+                                            payloadToSend = cleanValue;
+                                        }
                                     }
                                 } catch (e2) {
                                     // Strategy 4: Not JSON, use cleaned value

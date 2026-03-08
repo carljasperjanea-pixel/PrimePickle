@@ -907,26 +907,26 @@ router.post('/lobbies/team', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Join Lobby via QR Scan
+// Join Lobby via QR Scan or Manual Code
 router.post('/lobbies/join', authenticateToken, async (req: any, res) => {
   let { qr_payload } = req.body;
   if (typeof qr_payload === 'string') {
     qr_payload = qr_payload.trim().replace(/^"|"$/g, '');
   }
-  console.log(`[DEBUG] /lobbies/join called. User: ${req.user.id}, Payload: "${qr_payload}"`);
+  console.log(`[DEBUG] /lobbies/join called. User: ${req.user.id}, Input: "${qr_payload}"`);
   
   try {
-    // Find lobby by QR payload
+    // Find lobby by QR payload OR ID (to support manual entry of Lobby ID)
     const { data: lobby, error: lobbyError } = await supabase
       .from('lobbies')
       .select('*')
-      .eq('qr_payload', qr_payload)
+      .or(`qr_payload.eq.${qr_payload},id.eq.${qr_payload}`)
       .single();
     
     console.log('[DEBUG] Lobby lookup result:', { lobby, error: lobbyError });
     
     if (lobbyError || !lobby) {
-      return res.status(404).json({ error: 'Invalid QR Code' });
+      return res.status(404).json({ error: 'Invalid QR Code or Lobby ID' });
     }
 
     // Check if player is already in ANY active lobby (status != completed)
