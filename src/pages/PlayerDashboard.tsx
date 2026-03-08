@@ -976,7 +976,19 @@ export default function PlayerDashboard() {
                             // Clean up value: remove quotes if present, trim whitespace
                             const cleanValue = rawValue.replace(/^"|"$/g, '').trim();
                             console.log('Scanned QR:', cleanValue);
-                            handleJoinLobby(cleanValue);
+                            
+                            let payloadToSend = cleanValue;
+                            try {
+                              const parsed = JSON.parse(cleanValue);
+                              if (parsed && parsed.payload) {
+                                payloadToSend = parsed.payload;
+                              }
+                            } catch (e) {
+                              // Not JSON, use raw value
+                              console.log('QR code is not JSON, using raw value');
+                            }
+                            
+                            handleJoinLobby(payloadToSend);
                           }
                         }}
                         onError={(error: any) => console.log(error?.message)}
