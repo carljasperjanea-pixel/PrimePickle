@@ -76,8 +76,8 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
         }
       };
 
-      ws.onclose = () => {
-        console.log('Disconnected from WebSocket');
+      ws.onclose = (event) => {
+        console.log('Disconnected from WebSocket', event.code, event.reason);
         setIsConnected(false);
         isInitialized.current = false; // Reset initialization state on disconnect
         // Try to reconnect after 3 seconds
