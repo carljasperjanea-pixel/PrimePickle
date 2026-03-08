@@ -988,6 +988,19 @@ function LobbiesTab() {
             </DialogHeader>
             {selectedLobby && (
               <div className="space-y-6">
+                <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border border-dashed">
+                  <QRCodeCanvas 
+                    value={JSON.stringify({ 
+                      type: 'join_lobby', 
+                      lobbyId: selectedLobby.id, 
+                      payload: selectedLobby.qr_payload 
+                    })} 
+                    size={160}
+                    level="H"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">Scan to Join</p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-gray-50 rounded-lg">
                     <p className="text-xs text-gray-500">Status</p>
