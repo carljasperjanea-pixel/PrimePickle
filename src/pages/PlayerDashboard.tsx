@@ -161,19 +161,20 @@ export default function PlayerDashboard() {
       const data = await apiRequest('/lobbies/active');
       if (data.lobby) {
         setCurrentLobby(data.lobby);
+        if (data.players) {
+          setActiveLobbyPlayers(data.players);
+        } else {
+          setActiveLobbyPlayers([]);
+        }
       } else {
         setCurrentLobby(null);
-      }
-      
-      if (data.players) {
-        setActiveLobbyPlayers(data.players);
-      } else {
         setActiveLobbyPlayers([]);
       }
     } catch (e) {
       console.error("Failed to fetch active lobby players", e);
-      setActiveLobbyPlayers([]);
-      setCurrentLobby(null);
+      // Do not clear currentLobby on error to prevent unmounting Scorer
+      // setActiveLobbyPlayers([]); 
+      // setCurrentLobby(null);
     }
   };
 
@@ -185,7 +186,10 @@ export default function PlayerDashboard() {
       fetchActiveLobby(); // Refresh active lobby players
       setTimeout(() => setScanResult(null), 3000);
     } catch (err: any) {
-      setError(err.message);
+      console.error("Join error:", err);
+      // Show more detailed error for debugging
+      const payloadSnippet = qrPayload && typeof qrPayload === 'string' ? qrPayload.substring(0, 15) : 'invalid';
+      setError(`${err.message} (Payload: ${payloadSnippet}...)`);
       setTimeout(() => setError(''), 5000);
     }
   };
@@ -972,11 +976,49 @@ export default function PlayerDashboard() {
                         onScan={(result) => {
                           if (result && result[0]) {
                             setScanning(false);
-                            const rawValue = result[0].rawValue;
-                            // Clean up value: remove quotes if present, trim whitespace
-                            const cleanValue = rawValue.replace(/^"|"$/g, '').trim();
-                            console.log('Scanned QR:', cleanValue);
-                            handleJoinLobby(cleanValue);
+                            // @ts-ignore - rawValue exists in the library but might be missing in types
+                            const rawValue = result[0].rawValue || result[0].text || '';
+                            console.log('Raw Scanned Value:', rawValue);
+                            
+                            let payloadToSend = rawValue;
+                            
+                            try {
+                                // Strategy 1: Try parsing raw value directly
+                                // Handles: {"type":"...","payload":"..."}
+                                const parsed = JSON.parse(rawValue);
+                                if (parsed) {
+                                    if (parsed.payload) {
+                                        payloadToSend = parsed.payload;
+                                    } else if (parsed.lobbyId) {
+                                        // Fallback to Lobby ID if payload is missing (supported by backend now)
+                                        payloadToSend = parsed.lobbyId;
+                                    }
+                                }
+                            } catch (e) {
+                                // Strategy 2: Try cleaning quotes and parsing
+                                // Handles: "{\"type\":\"...\",\"payload\":\"...\"}"
+                                const cleanValue = rawValue.replace(/^"|"$/g, '').trim();
+                                try {
+                                    const parsedClean = JSON.parse(cleanValue);
+                                    if (parsedClean) {
+                                        if (parsedClean.payload) {
+                                            payloadToSend = parsedClean.payload;
+                                        } else if (parsedClean.lobbyId) {
+                                            payloadToSend = parsedClean.lobbyId;
+                                        } else {
+                                            // Strategy 3: Use cleaned value (fallback for old UUID codes)
+                                            payloadToSend = cleanValue;
+                                        }
+                                    }
+                                } catch (e2) {
+                                    // Strategy 4: Not JSON, use cleaned value
+                                    // Handles: some-uuid-string
+                                    payloadToSend = cleanValue;
+                                }
+                            }
+                            
+                            console.log('Final Payload to Send:', payloadToSend);
+                            handleJoinLobby(payloadToSend);
                           }
                         }}
                         onError={(error: any) => console.log(error?.message)}
