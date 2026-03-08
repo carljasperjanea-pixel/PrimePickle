@@ -897,7 +897,8 @@ function LobbiesTab() {
   const [lobbies, setLobbies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [createdLobby, setCreatedLobby] = useState<any>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedLobby, setSelectedLobby] = useState<any>(null);
 
   useEffect(() => {
     fetchLobbies();
@@ -918,7 +919,7 @@ function LobbiesTab() {
     try {
       const lobby = await apiRequest('/lobbies', 'POST');
       setCreatedLobby(lobby);
-      setIsDialogOpen(true);
+      setIsCreateDialogOpen(true);
       fetchLobbies();
     } catch (e: any) {
       alert(`Failed to create lobby: ${e.message}`);
@@ -932,7 +933,9 @@ function LobbiesTab() {
           <h2 className="text-lg font-medium text-gray-900">Active Game Lobbies</h2>
           <p className="text-sm text-gray-500">Manage and monitor ongoing game sessions</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        
+        {/* Create Lobby Dialog */}
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={handleCreateLobby} className="bg-emerald-600 hover:bg-emerald-700">
               <Gamepad2 className="mr-2 h-4 w-4" /> Create New Lobby
@@ -966,11 +969,80 @@ function LobbiesTab() {
                 </code>
               </div>
               <div className="w-full pt-4">
-                <Button className="w-full" onClick={() => setIsDialogOpen(false)}>
+                <Button className="w-full" onClick={() => setIsCreateDialogOpen(false)}>
                   Done
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* View Details Dialog */}
+        <Dialog open={!!selectedLobby} onOpenChange={(open) => !open && setSelectedLobby(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Lobby Details</DialogTitle>
+              <DialogDescription>
+                Lobby ID: <span className="font-mono text-xs">{selectedLobby?.id}</span>
+              </DialogDescription>
+            </DialogHeader>
+            {selectedLobby && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500">Status</p>
+                    <Badge variant={selectedLobby.status === 'open' ? 'default' : 'secondary'} 
+                      className={`mt-1 ${selectedLobby.status === 'open' ? 'bg-green-100 text-green-700' : ''}`}>
+                      {selectedLobby.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500">Created At</p>
+                    <p className="text-sm font-medium mt-1">
+                      {new Date(selectedLobby.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium mb-3 flex items-center justify-between">
+                    <span>Connected Players</span>
+                    <span className="text-xs text-gray-500">{selectedLobby.players?.length || 0} / 4</span>
+                  </h4>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                    {selectedLobby.players && selectedLobby.players.length > 0 ? (
+                      selectedLobby.players.map((player: any) => (
+                        <div key={player.id} className="flex items-center justify-between p-2 bg-white border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={player.avatar_url} />
+                              <AvatarFallback>{player.display_name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium">{player.display_name}</p>
+                              <p className="text-xs text-gray-500 font-mono">MMR: {player.mmr}</p>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {new Date(player.joined_at).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-400 text-sm bg-gray-50 rounded-lg border border-dashed">
+                        No players joined yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button variant="outline" className="w-full" onClick={() => setSelectedLobby(null)}>
+                    Close Details
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -1009,32 +1081,37 @@ function LobbiesTab() {
                   <div>
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-gray-500">Players</span>
-                      <span className="font-medium">{lobby.player_count || 0} / 10</span>
+                      <span className="font-medium">{lobby.player_count || 0} / 4</span>
                     </div>
                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
-                        style={{ width: `${((lobby.player_count || 0) / 10) * 100}%` }}
+                        style={{ width: `${((lobby.player_count || 0) / 4) * 100}%` }}
                       ></div>
                     </div>
                   </div>
                   
                   <div className="flex -space-x-2 overflow-hidden py-1 min-h-[32px]">
-                    {lobby.players && lobby.players.slice(0, 5).map((player: any) => (
+                    {lobby.players && lobby.players.slice(0, 4).map((player: any) => (
                       <Avatar key={player.id} className="inline-block h-8 w-8 ring-2 ring-white">
                         <AvatarImage src={player.avatar_url} />
                         <AvatarFallback>{player.display_name?.slice(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                     ))}
-                    {lobby.player_count > 5 && (
+                    {lobby.player_count > 4 && (
                       <div className="flex items-center justify-center h-8 w-8 rounded-full ring-2 ring-white bg-gray-100 text-xs font-medium text-gray-500">
-                        +{lobby.player_count - 5}
+                        +{lobby.player_count - 4}
                       </div>
                     )}
                   </div>
 
                   <div className="pt-2 flex gap-2">
-                    <Button variant="outline" size="sm" className="w-full text-xs">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full text-xs"
+                      onClick={() => setSelectedLobby(lobby)}
+                    >
                       View Details
                     </Button>
                   </div>
