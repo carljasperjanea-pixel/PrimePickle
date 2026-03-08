@@ -21,10 +21,11 @@ interface Lobby {
 const lobbies = new Map<string, Lobby>();
 
 export function setupWebSocket(server: Server) {
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  const wss = new WebSocketServer({ server, path: '/game-ws' });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
     let currentLobbyId: string | null = null;
+    console.log(`[WS] New connection from ${req.socket.remoteAddress}`);
 
     ws.on('message', (message: string) => {
       try {

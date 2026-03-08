@@ -41,7 +41,7 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
 
     const connect = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const wsUrl = `${protocol}//${window.location.host}/game-ws`;
       console.log('Connecting to WebSocket:', wsUrl);
       ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -59,12 +59,14 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
           if (data.type === 'GAME_STATE_UPDATE') {
             setState(data.payload);
             
-            // On first connection (or reconnect), if state is setup, fetch details from DB
-            // to see if we should be in 'playing' mode or restore settings.
+            // On first connection (or reconnect), if state is setup OR if we are playing but missing names, fetch details from DB
             if (!isInitialized.current) {
               isInitialized.current = true;
-              if (data.payload.status === 'setup') {
-                 console.log('Initial state is setup, fetching lobby details from DB...');
+              const isSetup = data.payload.status === 'setup';
+              const isPlayingButMissingNames = data.payload.status === 'playing' && !data.payload.settings.team1Player1;
+              
+              if (isSetup || isPlayingButMissingNames) {
+                 console.log('Initial state is setup or missing names, fetching lobby details from DB...');
                  fetchLobbyDetails();
               }
             }
@@ -243,8 +245,9 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Pickleball Scorer</h1>
               <p className="text-gray-400 mt-2 text-sm md:text-base">Doubles Match Setup</p>
               {!isConnected && (
-                <div className="mt-2 text-xs text-yellow-400 font-bold animate-pulse">
-                  Connecting to Realtime...
+                <div className="mt-2 flex items-center justify-end gap-2">
+                  <span className="text-xs text-yellow-400 font-bold animate-pulse">Connecting...</span>
+                  <button onClick={() => window.location.reload()} className="text-[10px] bg-white/10 px-2 py-0.5 rounded hover:bg-white/20 text-white">Reload</button>
                 </div>
               )}
             </div>
@@ -380,7 +383,17 @@ export default function Scorer({ lobbyId: propLobbyId, onMatchComplete }: Scorer
         </button>
         <div className="font-mono font-bold text-gray-900 flex flex-col items-center">
           <span className="text-sm md:text-base">GOAL: {state.settings.matchPoint}</span>
-          {!isConnected && <span className="text-[10px] text-red-500 animate-pulse">Disconnected</span>}
+          {!isConnected && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-red-500 animate-pulse">Disconnected</span>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded hover:bg-red-200"
+              >
+                Reload
+              </button>
+            </div>
+          )}
         </div>
         <button 
           onClick={onUndo} 
