@@ -85,7 +85,7 @@ router.post('/auth/signup', async (req, res) => {
       if (error.code === '23505') { // Unique violation
         return res.status(400).json({ error: 'Email already exists' });
       }
-      if (error.code === '42P01') { // Undefined table
+      if (error.code === '42P01' || error.code === 'PGRST205') { // Undefined table
         return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
       }
       if (error.code === '42501') { // RLS violation
@@ -139,7 +139,7 @@ router.post('/auth/login', async (req, res) => {
           ...error
         });
         
-        if (error.code === '42P01') { // Undefined table
+        if (error.code === '42P01' || error.code === 'PGRST205') { // Undefined table
           return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
         }
         if (error.code === '42501') { // RLS violation
@@ -205,6 +205,27 @@ router.put('/user/profile', authenticateToken, async (req: any, res) => {
   } catch (error: any) {
     console.error('Profile update error:', error);
     res.status(500).json({ error: 'Failed to update profile', details: error.message });
+  }
+});
+
+// Get Public Feature Flags
+router.get('/public/feature-flags', async (req, res) => {
+  try {
+    const { data: flags, error } = await supabase
+      .from('feature_flags')
+      .select('key, is_enabled');
+
+    if (error) {
+      // If table doesn't exist, return empty
+      if (error.code === '42P01' || error.code === 'PGRST205') {
+        return res.json({ flags: [] });
+      }
+      throw error;
+    }
+    res.json({ flags: flags || [] });
+  } catch (error) {
+    console.error('Public feature flags fetch error:', error);
+    res.json({ flags: [] }); // Fail open
   }
 });
 
@@ -1057,6 +1078,41 @@ router.post('/lobbies/cancel', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Temporary route to seed a super admin account
+router.get('/auth/seed-super-admin', async (req, res) => {
+  try {
+    const email = 'superadmin@primepickle.com';
+    const password = 'password123';
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const id = uuidv4();
+
+    // Check if exists
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (existing) {
+      return res.json({ message: 'Super Admin account already exists', email, password });
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .insert([
+        { id, email, password_hash: hashedPassword, display_name: 'Super Admin', role: 'super_admin' }
+      ]);
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ message: 'Super Admin account created successfully', email, password });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Temporary route to seed an admin account
 router.get('/auth/seed-admin', async (req, res) => {
   try {
@@ -1360,6 +1416,200 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
       } catch (error) {
         console.error('Set primary gear error:', error);
         res.status(500).json({ error: 'Failed to set primary gear' });
+      }
+    });
+
+    // --- Super Admin Routes ---
+
+    // Middleware for Super Admin
+    const authenticateSuperAdmin = async (req: any, res: any, next: any) => {
+      authenticateToken(req, res, async () => {
+        if (req.user.role !== 'super_admin') {
+          return res.status(403).json({ error: 'Super Admin access required' });
+        }
+        next();
+      });
+    };
+
+    // Helper to log audit
+    const logAudit = async (adminId: string, action: string, targetId?: string, details?: any, ip?: string) => {
+      try {
+        const { error } = await supabase.from('audit_logs').insert([{
+          admin_id: adminId,
+          action_performed: action,
+          target_id: targetId,
+          details,
+          ip_address: ip
+        }]);
+        if (error) console.log('Audit log skipped (table might not exist):', action);
+      } catch (e) {
+        console.error('Failed to log audit:', e);
+      }
+    };
+
+    // Get Analytics
+    router.get('/superadmin/analytics', authenticateSuperAdmin, async (req: any, res) => {
+      try {
+        const { count: totalUsers } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+        const { count: activeLobbies } = await supabase.from('lobbies').select('*', { count: 'exact', head: true }).neq('status', 'completed');
+        
+        // Mock revenue and system health for now
+        res.json({
+          totalUsers: totalUsers || 0,
+          activeSessions: activeLobbies || 0,
+          revenue: 12500,
+          systemHealth: {
+            uptime: 99.99,
+            apiResponseTime: 45,
+            errorRate: 0.01,
+            status: 'green'
+          },
+          growth: [
+            { date: '2023-10-01', signups: 12 },
+            { date: '2023-10-02', signups: 19 },
+            { date: '2023-10-03', signups: 15 },
+            { date: '2023-10-04', signups: 25 },
+            { date: '2023-10-05', signups: 22 },
+            { date: '2023-10-06', signups: 30 },
+            { date: '2023-10-07', signups: 28 },
+          ]
+        });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch analytics' });
+      }
+    });
+
+    // Get Users
+    router.get('/superadmin/users', authenticateSuperAdmin, async (req: any, res) => {
+      try {
+        const { data: users, error } = await supabase
+          .from('profiles')
+          .select('id, email, display_name, full_name, role, created_at')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        res.json({ users });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch users' });
+      }
+    });
+
+    // Update User Role
+    router.put('/superadmin/users/:id/role', authenticateSuperAdmin, async (req: any, res) => {
+      const { role } = req.body;
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ role })
+          .eq('id', req.params.id);
+        
+        if (error) throw error;
+        await logAudit(req.user.id, 'UPDATE_USER_ROLE', req.params.id, { role }, req.ip);
+        res.json({ message: 'Role updated' });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to update user role' });
+      }
+    });
+
+    // Suspend/Ban User (Mocked via role or status if we had one, using role='banned' for now)
+    router.post('/superadmin/users/:id/ban', authenticateSuperAdmin, async (req: any, res) => {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ role: 'banned' })
+          .eq('id', req.params.id);
+        
+        if (error) throw error;
+        await logAudit(req.user.id, 'BAN_USER', req.params.id, null, req.ip);
+        res.json({ message: 'User banned' });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to ban user' });
+      }
+    });
+    
+    // Get Audit Logs
+    router.get('/superadmin/audit-logs', authenticateSuperAdmin, async (req: any, res) => {
+      try {
+        const { data: logs, error } = await supabase
+          .from('audit_logs')
+          .select('*, profiles(display_name, email)')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        
+        if (error) {
+           // Return mock data if table doesn't exist
+           return res.json({ logs: [
+             { id: '1', created_at: new Date().toISOString(), admin_id: 'system', action_performed: 'SYSTEM_START', target_id: null, ip_address: '127.0.0.1', profiles: { email: 'system@local' } }
+           ]});
+        }
+        res.json({ logs });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch audit logs' });
+      }
+    });
+
+    // Get Feature Flags
+    router.get('/superadmin/feature-flags', authenticateSuperAdmin, async (req: any, res) => {
+      try {
+        const { data: flags, error } = await supabase
+          .from('feature_flags')
+          .select('*')
+          .order('key');
+        
+        if (error) {
+           // Return mock data if table doesn't exist
+           return res.json({ flags: [
+             { id: '1', key: 'maintenance_mode', is_enabled: false, description: 'Global Kill-Switch for maintenance mode' },
+             { id: '2', key: 'user_registration', is_enabled: true, description: 'Allow new users to register' }
+           ]});
+        }
+        res.json({ flags });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch feature flags' });
+      }
+    });
+
+    // Update Feature Flag
+    router.put('/superadmin/feature-flags/:key', authenticateSuperAdmin, async (req: any, res) => {
+      const { is_enabled } = req.body;
+      try {
+        const { error } = await supabase
+          .from('feature_flags')
+          .update({ is_enabled, updated_at: new Date().toISOString() })
+          .eq('key', req.params.key);
+        
+        if (error) {
+           // Just return success if table doesn't exist
+           return res.json({ message: 'Feature flag updated (mock)' });
+        }
+        await logAudit(req.user.id, 'UPDATE_FEATURE_FLAG', undefined, { key: req.params.key, is_enabled }, req.ip);
+        res.json({ message: 'Feature flag updated' });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to update feature flag' });
+      }
+    });
+
+    // Impersonate User
+    router.post('/superadmin/impersonate/:id', authenticateSuperAdmin, async (req: any, res) => {
+      try {
+        const { data: targetUser, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', req.params.id)
+          .single();
+          
+        if (error || !targetUser) return res.status(404).json({ error: 'User not found' });
+        
+        // Generate a token for the target user
+        const token = jwt.sign({ id: targetUser.id, email: targetUser.email, role: targetUser.role, impersonatedBy: req.user.id }, JWT_SECRET);
+        res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+        
+        await logAudit(req.user.id, 'IMPERSONATE_USER', targetUser.id, null, req.ip);
+        
+        const { password_hash, ...userWithoutPassword } = targetUser;
+        res.json({ user: userWithoutPassword });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to impersonate user' });
       }
     });
 
