@@ -29,15 +29,6 @@ const authenticateToken = (req: any, res: any, next: any) => {
 router.post('/auth/signup', async (req, res) => {
   const { email, password, display_name, full_name, role, address, phone } = req.body;
   
-  // Pre-check for Publishable Key
-  if (supabaseKeyConfig && supabaseKeyConfig.startsWith('sb_publishable')) {
-    console.error('CRITICAL ERROR: Attempting to sign up with a Publishable Key.');
-    return res.status(500).json({ 
-      error: 'Configuration Error: Server is using a Publishable Key.',
-      details: 'You must use the SERVICE ROLE KEY for the server to create users. Update SUPABASE_KEY in your secrets.'
-    });
-  }
-
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const id = uuidv4();
@@ -112,15 +103,6 @@ router.post('/auth/signup', async (req, res) => {
 router.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
   
-  // Pre-check for Publishable Key
-  if (supabaseKeyConfig && supabaseKeyConfig.startsWith('sb_publishable')) {
-    console.error('CRITICAL ERROR: Attempting to login with a Publishable Key.');
-    return res.status(500).json({ 
-      error: 'Configuration Error: Server is using a Publishable Key.',
-      details: 'You must use the SERVICE ROLE KEY for the server to authenticate users. Update SUPABASE_KEY in your secrets.'
-    });
-  }
-
   try {
     const { data: user, error } = await supabase
       .from('profiles')
