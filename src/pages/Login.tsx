@@ -15,9 +15,7 @@ export default function Login() {
     e.preventDefault();
     try {
       const data = await apiRequest('/auth/login', 'POST', { email, password });
-      if (data.user.role === 'super_admin') {
-        navigate('/super-admin');
-      } else if (data.user.role === 'admin') {
+      if (data.user.role === 'admin') {
         navigate('/admin');
       } else {
         navigate('/dashboard');
@@ -58,21 +56,10 @@ export default function Login() {
             <Button type="submit" className="w-full">Log In</Button>
           </form>
         </CardContent>
-        <CardFooter className="flex-col justify-center gap-2">
+        <CardFooter className="justify-center">
           <p className="text-sm text-muted-foreground">
             Don't have an account? <Link to="/register" className="text-primary hover:underline">Sign up</Link>
           </p>
-          <Button variant="link" size="sm" className="text-xs text-muted-foreground" onClick={async () => {
-            try {
-              const res = await fetch('/api/auth/seed-super-admin');
-              const data = await res.json();
-              alert(data.message + '\nEmail: ' + data.email + '\nPassword: ' + data.password);
-            } catch (e) {
-              alert('Failed to seed super admin');
-            }
-          }}>
-            Seed Super Admin
-          </Button>
         </CardFooter>
       </Card>
     </div>
