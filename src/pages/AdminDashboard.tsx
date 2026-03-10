@@ -3,13 +3,15 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode, Clock, X } from 'lucide-react';
+import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode, Clock, X, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { UserDirectory } from '@/components/UserDirectory';
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [lobbies, setLobbies] = useState<any[]>([]);
   const [qrLobby, setQrLobby] = useState<any>(null); // Lobby to show QR for
+  const [activeTab, setActiveTab] = useState<'lobbies' | 'directory'>('lobbies');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -139,31 +141,50 @@ export default function AdminDashboard() {
         </div>
 
         {/* Action Bar */}
-        <div>
-          <Button 
-            onClick={createLobby} 
-            disabled={isCreating}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-full px-6 shadow-md transition-all hover:shadow-lg"
-          >
-            {isCreating ? <Activity className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-            {isCreating ? 'Creating...' : 'Open New Court / Lobby'}
-          </Button>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+          <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+            <button 
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'lobbies' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+              onClick={() => setActiveTab('lobbies')}
+            >
+              Lobbies
+            </button>
+            <button 
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'directory' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+              onClick={() => setActiveTab('directory')}
+            >
+              User Directory
+            </button>
+          </div>
+          
+          {activeTab === 'lobbies' && (
+            <Button 
+              onClick={createLobby} 
+              disabled={isCreating}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-full px-6 shadow-md transition-all hover:shadow-lg"
+            >
+              {isCreating ? <Activity className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+              {isCreating ? 'Creating...' : 'Open New Court / Lobby'}
+            </Button>
+          )}
         </div>
 
-        {/* Lobby Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {lobbies.filter(l => l.status !== 'completed').map((lobby, index) => (
-            <LobbyCard 
-              key={lobby.id} 
-              lobby={lobby} 
-              index={index} 
-              onViewQR={() => setQrLobby(lobby)}
-              onCompleteMatch={completeMatch}
-            />
-          ))}
-          
-          {/* Show completed matches section if needed, or just filter them out for now as per "Active Lobbies" focus */}
-        </div>
+        {/* Tab Content */}
+        {activeTab === 'lobbies' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {lobbies.filter(l => l.status !== 'completed').map((lobby, index) => (
+              <LobbyCard 
+                key={lobby.id} 
+                lobby={lobby} 
+                index={index} 
+                onViewQR={() => setQrLobby(lobby)}
+                onCompleteMatch={completeMatch}
+              />
+            ))}
+          </div>
+        ) : (
+          <UserDirectory />
+        )}
       </main>
 
       {/* QR Code Modal */}

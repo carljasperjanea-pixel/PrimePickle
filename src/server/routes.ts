@@ -442,6 +442,71 @@ router.post('/lobbies', authenticateToken, async (req: any, res) => {
   }
 });
 
+// --- Admin Routes ---
+
+// Get paginated users for directory
+router.get('/admin/users', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    const { search, role, status, sortBy = 'created_at', sortOrder = 'desc', page = '1', limit = '10' } = req.query;
+    
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    let query = supabase
+      .from('profiles')
+      .select('id, email, display_name, full_name, role, created_at, games_played, mmr', { count: 'exact' });
+
+    // Filtering
+    if (search) {
+      query = query.or(`display_name.ilike.%${search}%,email.ilike.%${search}%,full_name.ilike.%${search}%`);
+    }
+    if (role && role !== 'all') {
+      query = query.eq('role', role);
+    }
+    if (status && status !== 'all') {
+      if (status === 'active') {
+        query = query.gt('games_played', 0);
+      } else if (status === 'inactive') {
+        query = query.eq('games_played', 0);
+      }
+    }
+
+    // Sorting
+    const allowedSortColumns = ['display_name', 'email', 'role', 'created_at', 'games_played', 'mmr'];
+    const sortCol = allowedSortColumns.includes(sortBy as string) ? (sortBy as string) : 'created_at';
+    const isAscending = sortOrder === 'asc';
+    
+    query = query.order(sortCol, { ascending: isAscending });
+
+    // Pagination
+    query = query.range(offset, offset + limitNum - 1);
+
+    const { data: users, error, count } = await query;
+
+    if (error) throw error;
+
+    // Add computed status
+    const usersWithStatus = users.map(u => ({
+      ...u,
+      status: u.games_played > 0 ? 'active' : 'inactive'
+    }));
+
+    res.json({
+      users: usersWithStatus,
+      total: count || 0,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil((count || 0) / limitNum)
+    });
+  } catch (error) {
+    console.error('Fetch admin users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 // Get Lobbies (Admin: all active, Player: joined)
 router.get('/lobbies', authenticateToken, async (req: any, res) => {
   try {
