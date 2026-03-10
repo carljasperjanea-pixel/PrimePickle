@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { apiRequest } from '@/lib/api';
-import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown, ShieldAlert, KeyRound, Ban, ShieldCheck } from 'lucide-react';
 
 export function UserDirectory() {
   const [users, setUsers] = useState<any[]>([]);
@@ -62,6 +62,22 @@ export function UserDirectory() {
       setSortOrder('asc');
     }
     setPage(1);
+  };
+
+  const handleAction = async (userId: string, action: 'reset-password' | 'toggle-mfa' | 'toggle-suspend') => {
+    try {
+      if (action === 'reset-password') {
+        if (!confirm('Are you sure you want to force a password reset for this user?')) return;
+      } else if (action === 'toggle-suspend') {
+        if (!confirm('Are you sure you want to toggle the suspension status for this user?')) return;
+      }
+
+      await apiRequest(`/admin/users/${userId}/${action}`, 'POST');
+      fetchUsers(); // Refresh the list
+    } catch (e) {
+      console.error(`Failed to ${action}:`, e);
+      alert(`Failed to perform action: ${(e as any).message}`);
+    }
   };
 
   const SortIcon = ({ column }: { column: string }) => {
@@ -131,12 +147,13 @@ export function UserDirectory() {
                 <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('created_at')}>
                   Joined Date <SortIcon column="created_at" />
                 </th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex justify-center items-center gap-2">
                       <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                       Loading directory...
@@ -145,15 +162,18 @@ export function UserDirectory() {
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                     No users found matching your criteria.
                   </td>
                 </tr>
               ) : (
                 users.map((u) => (
-                  <tr key={u.id} className="border-b last:border-0 hover:bg-gray-50/50 transition-colors">
+                  <tr key={u.id} className={`border-b last:border-0 hover:bg-gray-50/50 transition-colors ${u.is_suspended ? 'bg-rose-50/30' : ''}`}>
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{u.display_name || u.full_name || 'Unnamed'}</div>
+                      <div className="font-medium text-gray-900 flex items-center gap-2">
+                        {u.display_name || u.full_name || 'Unnamed'}
+                        {u.is_suspended && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">BANNED</span>}
+                      </div>
                       <div className="text-xs text-gray-500">{u.email}</div>
                     </td>
                     <td className="px-6 py-4">
@@ -180,6 +200,37 @@ export function UserDirectory() {
                         month: 'short',
                         day: 'numeric'
                       })}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                          title="Force Password Reset"
+                          onClick={() => handleAction(u.id, 'reset-password')}
+                        >
+                          <KeyRound className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className={`h-8 w-8 p-0 ${u.mfa_enabled ? 'text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100' : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                          title={u.mfa_enabled ? "Disable MFA" : "Enable MFA"}
+                          onClick={() => handleAction(u.id, 'toggle-mfa')}
+                        >
+                          {u.mfa_enabled ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className={`h-8 w-8 p-0 ${u.is_suspended ? 'text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100' : 'text-gray-500 hover:text-rose-600 hover:bg-rose-50'}`}
+                          title={u.is_suspended ? "Unban User" : "Suspend/Ban User"}
+                          onClick={() => handleAction(u.id, 'toggle-suspend')}
+                        >
+                          <Ban className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))

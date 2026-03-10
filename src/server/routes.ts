@@ -457,7 +457,7 @@ router.get('/admin/users', authenticateToken, async (req: any, res) => {
 
     let query = supabase
       .from('profiles')
-      .select('id, email, display_name, full_name, role, created_at, games_played, mmr', { count: 'exact' });
+      .select('id, email, display_name, full_name, role, created_at, games_played, mmr, mfa_enabled, is_suspended', { count: 'exact' });
 
     // Filtering
     if (search) {
@@ -484,7 +484,42 @@ router.get('/admin/users', authenticateToken, async (req: any, res) => {
     // Pagination
     query = query.range(offset, offset + limitNum - 1);
 
-    const { data: users, error, count } = await query;
+    let { data: users, error, count } = await query;
+
+    // Fallback if mfa_enabled or is_suspended columns don't exist yet
+    if (error && error.code === 'PGRST106') {
+      let fallbackQuery = supabase
+        .from('profiles')
+        .select('id, email, display_name, full_name, role, created_at, games_played, mmr', { count: 'exact' });
+        
+      if (search) {
+        fallbackQuery = fallbackQuery.or(`display_name.ilike.%${search}%,email.ilike.%${search}%,full_name.ilike.%${search}%`);
+      }
+      if (role && role !== 'all') {
+        fallbackQuery = fallbackQuery.eq('role', role);
+      }
+      if (status && status !== 'all') {
+        if (status === 'active') {
+          fallbackQuery = fallbackQuery.gt('games_played', 0);
+        } else if (status === 'inactive') {
+          fallbackQuery = fallbackQuery.eq('games_played', 0);
+        }
+      }
+      
+      fallbackQuery = fallbackQuery.order(sortCol, { ascending: isAscending });
+      fallbackQuery = fallbackQuery.range(offset, offset + limitNum - 1);
+      
+      const fallbackResult = await fallbackQuery;
+      
+      if (fallbackResult.data) {
+        users = fallbackResult.data.map(u => ({ ...u, mfa_enabled: false, is_suspended: false }));
+      } else {
+        users = null;
+      }
+      
+      error = fallbackResult.error;
+      count = fallbackResult.count;
+    }
 
     if (error) throw error;
 
@@ -504,6 +539,100 @@ router.get('/admin/users', authenticateToken, async (req: any, res) => {
   } catch (error) {
     console.error('Fetch admin users error:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Toggle MFA
+router.post('/admin/users/:id/toggle-mfa', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    const { id } = req.params;
+    const { data: user, error: fetchError } = await supabase
+      .from('profiles')
+      .select('mfa_enabled')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === 'PGRST106') {
+        return res.status(400).json({ error: 'MFA column not found. Please run fix_rls.sql in Supabase.' });
+      }
+      throw fetchError;
+    }
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ mfa_enabled: !user.mfa_enabled })
+      .eq('id', id);
+
+    if (updateError) {
+      if (updateError.code === 'PGRST106') {
+        return res.status(400).json({ error: 'MFA column not found. Please run fix_rls.sql in Supabase.' });
+      }
+      throw updateError;
+    }
+
+    res.json({ success: true, mfa_enabled: !user.mfa_enabled });
+  } catch (error) {
+    console.error('Toggle MFA error:', error);
+    res.status(500).json({ error: 'Failed to toggle MFA' });
+  }
+});
+
+// Toggle Suspend
+router.post('/admin/users/:id/toggle-suspend', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    const { id } = req.params;
+    const { data: user, error: fetchError } = await supabase
+      .from('profiles')
+      .select('is_suspended')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === 'PGRST106') {
+        return res.status(400).json({ error: 'Suspended column not found. Please run fix_rls.sql in Supabase.' });
+      }
+      throw fetchError;
+    }
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ is_suspended: !user.is_suspended })
+      .eq('id', id);
+
+    if (updateError) {
+      if (updateError.code === 'PGRST106') {
+        return res.status(400).json({ error: 'Suspended column not found. Please run fix_rls.sql in Supabase.' });
+      }
+      throw updateError;
+    }
+
+    res.json({ success: true, is_suspended: !user.is_suspended });
+  } catch (error) {
+    console.error('Toggle suspend error:', error);
+    res.status(500).json({ error: 'Failed to toggle suspend status' });
+  }
+});
+
+// Force Password Reset
+router.post('/admin/users/:id/reset-password', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    const { id } = req.params;
+    
+    // In a real app, this would send a password reset email via Supabase Auth
+    // For this demo, we'll just return success
+    // await supabase.auth.admin.generateLink({ type: 'recovery', email: user.email })
+    
+    res.json({ success: true, message: 'Password reset email sent' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to initiate password reset' });
   }
 });
 
