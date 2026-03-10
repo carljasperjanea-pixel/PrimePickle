@@ -15,7 +15,9 @@ export default function Login() {
     e.preventDefault();
     try {
       const data = await apiRequest('/auth/login', 'POST', { email, password });
-      if (data.user.role === 'admin') {
+      if (data.user.role === 'super_admin') {
+        navigate('/super-admin');
+      } else if (data.user.role === 'admin') {
         navigate('/admin');
       } else {
         navigate('/dashboard');

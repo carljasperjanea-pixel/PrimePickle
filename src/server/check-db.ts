@@ -161,6 +161,22 @@ async function checkDb() {
   } else {
     console.log('Success! "player_gears" table exists.');
   }
+  // Check for 'audit_logs' table
+  console.log('Checking schema for "audit_logs"...');
+  const { error: auditError } = await supabase
+    .from('audit_logs')
+    .select('id')
+    .limit(1);
+
+  if (auditError) {
+    console.error('Error checking "audit_logs":', auditError);
+    if (auditError.code === '42P01') { // Undefined table
+      console.error('--> CONCLUSION: The "audit_logs" table does not exist.');
+      console.error('--> ACTION: Run "src/server/migration_super_admin.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "audit_logs" table exists.');
+  }
 }
 
 checkDb();

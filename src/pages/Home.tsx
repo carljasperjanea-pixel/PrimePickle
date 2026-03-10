@@ -8,25 +8,25 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Hero Section */}
-      <section className="bg-primary text-primary-foreground py-20 px-6 text-center">
+      <section className="bg-primary text-primary-foreground py-12 md:py-20 px-6 text-center">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <h1 className="text-5xl font-bold mb-6">PrimePickle</h1>
-          <p className="text-xl mb-8 max-w-2xl mx-auto">
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 md:mb-6">PrimePickle</h1>
+          <p className="text-lg md:text-xl mb-6 md:mb-8 max-w-2xl mx-auto">
             The ultimate lobby-first pickleball matchmaking platform. 
             Join games, track your MMR, and compete with integrity.
           </p>
-          <div className="flex justify-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
             <Link to="/register">
-              <Button size="lg" variant="secondary" className="font-bold">
+              <Button size="lg" variant="secondary" className="font-bold w-full sm:w-auto">
                 Get Started
               </Button>
             </Link>
             <Link to="/login">
-              <Button size="lg" variant="outline" className="bg-transparent border-white text-white hover:bg-white hover:text-primary">
+              <Button size="lg" variant="outline" className="bg-transparent border-white text-white hover:bg-white hover:text-primary w-full sm:w-auto">
                 Log In
               </Button>
             </Link>
@@ -35,8 +35,8 @@ export default function Home() {
       </section>
 
       {/* How It Works */}
-      <section className="py-16 px-6 max-w-6xl mx-auto">
-        <h2 className="text-3xl font-bold text-center mb-12 text-primary">How It Works</h2>
+      <section className="py-12 md:py-16 px-6 max-w-6xl mx-auto">
+        <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12 text-primary">How It Works</h2>
         <div className="grid md:grid-cols-3 gap-8">
           {[
             { icon: Users, title: "1. Register", desc: "Create your profile and get your initial MMR." },

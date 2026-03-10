@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "check-db": "tsx src/server/check-db.ts",
+    "seed-super-admin": "tsx src/server/seed-super-admin.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",

@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import apiRoutes from './src/server/routes.js';
 import dotenv from 'dotenv';
 import { setupWebSocket } from './src/server/websocket.js';
+import { seedSuperAdmin } from './src/server/seed-super-admin.js';
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ async function startServer() {
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    seedSuperAdmin().catch(console.error);
   });
 
   setupWebSocket(server);

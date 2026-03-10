@@ -15,7 +15,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     useUser().then(u => {
       if (!u) navigate('/login');
-      else if (u.role !== 'admin') navigate('/dashboard');
+      else if (u.role !== 'admin' && u.role !== 'super_admin') navigate('/dashboard');
       else {
         setUser(u);
         fetchLobbies();
@@ -88,13 +88,24 @@ export default function AdminDashboard() {
               <p className="text-emerald-100 text-sm opacity-90">Lobby & Business Management</p>
             </div>
           </div>
-          <Button 
-            variant="secondary" 
-            className="bg-white text-gray-800 hover:bg-gray-100 border-none shadow-sm gap-2"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-4 h-4" /> Logout
-          </Button>
+          <div className="flex items-center gap-4">
+            {user?.role === 'super_admin' && (
+              <Button 
+                variant="secondary" 
+                className="bg-white/20 text-white hover:bg-white/30 border-none shadow-sm"
+                onClick={() => navigate('/super-admin')}
+              >
+                Super Admin Panel
+              </Button>
+            )}
+            <Button 
+              variant="secondary" 
+              className="bg-white text-gray-800 hover:bg-gray-100 border-none shadow-sm gap-2"
+              onClick={handleLogout}
+            >
+              <LogOut className="w-4 h-4" /> Logout
+            </Button>
+          </div>
         </div>
       </header>
 

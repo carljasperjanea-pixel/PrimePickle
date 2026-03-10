@@ -5,6 +5,7 @@ export async function apiRequest(endpoint: string, method: string = 'GET', body?
       'Content-Type': 'application/json',
     },
     credentials: 'include', // Ensure cookies are sent with requests
+    cache: 'no-store',
   };
 
   if (body) {

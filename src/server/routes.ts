@@ -24,6 +24,69 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
+// --- Super Admin Routes ---
+
+// Get all users
+router.get('/super-admin/users', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    const { data: users, error } = await supabase
+      .from('profiles')
+      .select('id, email, display_name, full_name, role, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ users });
+  } catch (error) {
+    console.error('Fetch users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Update user role
+router.put('/super-admin/users/:id/role', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'super_admin') return res.sendStatus(403);
+  const { role } = req.body;
+
+  if (!['player', 'admin', 'super_admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  try {
+    const { data: user, error } = await supabase
+      .from('profiles')
+      .update({ role })
+      .eq('id', req.params.id)
+      .select('id, email, display_name, role')
+      .single();
+
+    if (error) throw error;
+    res.json({ user, message: 'Role updated successfully' });
+  } catch (error) {
+    console.error('Update role error:', error);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
+// Delete user
+router.delete('/super-admin/users/:id', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 // --- Auth Routes ---
 
 router.post('/auth/signup', async (req, res) => {
@@ -350,8 +413,8 @@ router.post('/lobbies', authenticateToken, async (req: any, res) => {
     console.log('[DEBUG] Could not decode key role');
   }
 
-  if (req.user.role !== 'admin') {
-    console.log('[DEBUG] Permission denied: User is not admin');
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+    console.log('[DEBUG] Permission denied: User is not admin or super_admin');
     return res.sendStatus(403);
   }
   
@@ -382,9 +445,9 @@ router.post('/lobbies', authenticateToken, async (req: any, res) => {
 // Get Lobbies (Admin: all active, Player: joined)
 router.get('/lobbies', authenticateToken, async (req: any, res) => {
   try {
-    if (req.user.role === 'admin') {
-      // Get all lobbies created by this admin
-      const { data: lobbies, error } = await supabase
+    if (req.user.role === 'admin' || req.user.role === 'super_admin') {
+      // Get lobbies
+      let query = supabase
         .from('lobbies')
         .select(`
           *,
@@ -398,8 +461,13 @@ router.get('/lobbies', authenticateToken, async (req: any, res) => {
             )
           )
         `)
-        .eq('admin_id', req.user.id)
         .order('created_at', { ascending: false });
+
+      if (req.user.role === 'admin') {
+        query = query.eq('admin_id', req.user.id);
+      }
+
+      const { data: lobbies, error } = await query;
 
       if (error) throw error;
 
@@ -840,7 +908,7 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
   
   try {
     // Authorization Check
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
       // Check if user is a participant in this lobby
       const { data: membership, error: memError } = await supabase
         .from('lobby_players')
