@@ -116,6 +116,60 @@ export function TournamentManager() {
     });
     const rounds = Array.from(roundsMap.values()).sort((a, b) => a.matches[0].round_number - b.matches[0].round_number);
 
+    const renderMatch = (match: any) => (
+      <Card key={match.id} className={`w-full min-w-[250px] border-l-4 ${match.winner_id ? 'border-l-emerald-500' : 'border-l-gray-300'} shadow-sm`}>
+        <CardContent className="p-3">
+          <div className="text-xs text-gray-500 mb-2 font-medium">Match {match.match_order} {match.is_bye && '(Bye)'}</div>
+          <div className="space-y-1">
+            {[
+              { id: match.player1_id, profile: match.player1 },
+              { id: match.player2_id, profile: match.player2 }
+            ].map((player, pIdx) => (
+              <div key={pIdx} className={`flex items-center justify-between p-2 rounded text-sm ${match.winner_id === player.id && player.id ? 'bg-emerald-50 font-bold text-emerald-700' : 'bg-gray-50'}`}>
+                <span className="truncate">{player.profile?.display_name || (match.is_bye ? 'BYE' : 'TBD')}</span>
+                {match.winner_id === player.id && player.id && <CheckCircle className="w-4 h-4 text-emerald-500" />}
+              </div>
+            ))}
+          </div>
+          
+          {!match.winner_id && !match.is_bye && match.player1_id && match.player2_id && (
+            <div className="mt-3 pt-3 border-t flex gap-2">
+              <Button size="sm" variant="outline" className="flex-1 text-xs h-7" onClick={() => {
+                const score = prompt('Enter score (e.g., 11-9):', '11-0');
+                if (score !== null) handleUpdateMatch(match.id, match.player1_id, score);
+              }}>
+                P1 Wins
+              </Button>
+              <Button size="sm" variant="outline" className="flex-1 text-xs h-7" onClick={() => {
+                const score = prompt('Enter score (e.g., 11-9):', '11-0');
+                if (score !== null) handleUpdateMatch(match.id, match.player2_id, score);
+              }}>
+                P2 Wins
+              </Button>
+            </div>
+          )}
+          {match.score && (
+            <div className="mt-2 text-center text-xs font-medium text-gray-600">
+              Score: {match.score}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+
+    const renderBracket = (bracketRounds: any[]) => (
+      <div className="flex flex-row gap-8 overflow-x-auto pb-8 pt-4 px-2">
+        {bracketRounds.map((round: any, idx: number) => (
+          <div key={idx} className="flex flex-col min-w-[250px] gap-4">
+            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider text-center mb-2">{round.name}</h3>
+            <div className="flex flex-col justify-around flex-1 gap-6">
+              {round.matches.map((match: any) => renderMatch(match))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -194,54 +248,41 @@ export function TournamentManager() {
             </Card>
           </div>
         ) : (
-          <div className="space-y-8">
-            {rounds.map((round: any, idx: number) => (
-              <div key={idx} className="space-y-4">
-                <h3 className="text-lg font-bold text-gray-800 border-b pb-2">{round.name}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {round.matches.map((match: any) => (
-                    <Card key={match.id} className={`border-l-4 ${match.winner_id ? 'border-l-emerald-500' : 'border-l-gray-300'}`}>
-                      <CardContent className="p-4">
-                        <div className="text-xs text-gray-500 mb-2 font-medium">Match {match.match_order} {match.is_bye && '(Bye)'}</div>
-                        <div className="space-y-2">
-                          {[
-                            { id: match.player1_id, profile: match.player1 },
-                            { id: match.player2_id, profile: match.player2 }
-                          ].map((player, pIdx) => (
-                            <div key={pIdx} className={`flex items-center justify-between p-2 rounded ${match.winner_id === player.id && player.id ? 'bg-emerald-50 font-bold text-emerald-700' : 'bg-gray-50'}`}>
-                              <span className="truncate">{player.profile?.display_name || (match.is_bye ? 'BYE' : 'TBD')}</span>
-                              {match.winner_id === player.id && player.id && <CheckCircle className="w-4 h-4 text-emerald-500" />}
-                            </div>
-                          ))}
-                        </div>
-                        
-                        {!match.winner_id && !match.is_bye && match.player1_id && match.player2_id && (
-                          <div className="mt-4 pt-4 border-t flex gap-2">
-                            <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => {
-                              const score = prompt('Enter score (e.g., 11-9):', '11-0');
-                              if (score !== null) handleUpdateMatch(match.id, match.player1_id, score);
-                            }}>
-                              P1 Wins
-                            </Button>
-                            <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => {
-                              const score = prompt('Enter score (e.g., 11-9):', '11-0');
-                              if (score !== null) handleUpdateMatch(match.id, match.player2_id, score);
-                            }}>
-                              P2 Wins
-                            </Button>
-                          </div>
-                        )}
-                        {match.score && (
-                          <div className="mt-2 text-center text-sm font-medium text-gray-600">
-                            Score: {match.score}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
+          <div className="space-y-8 bg-white p-6 rounded-xl border shadow-sm">
+            {tournament.format === 'round_robin' ? (
+              <div className="space-y-8">
+                {rounds.map((round: any, idx: number) => (
+                  <div key={idx} className="space-y-4">
+                    <h3 className="text-lg font-bold text-gray-800 border-b pb-2">{round.name}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {round.matches.map((match: any) => renderMatch(match))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : tournament.format === 'double_elimination' ? (
+              <div className="space-y-12">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-yellow-500" /> Winners Bracket
+                  </h3>
+                  {renderBracket(rounds.filter(r => r.matches[0].round_number < 100))}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-gray-400" /> Losers Bracket
+                  </h3>
+                  {renderBracket(rounds.filter(r => r.matches[0].round_number >= 100))}
                 </div>
               </div>
-            ))}
+            ) : (
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-yellow-500" /> Championship Bracket
+                </h3>
+                {renderBracket(rounds)}
+              </div>
+            )}
           </div>
         )}
       </div>
