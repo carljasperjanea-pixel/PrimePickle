@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, UserPlus, Shield, User, X, ArrowLeft, Trophy, Calendar } from 'lucide-react';
+import { Users, UserPlus, Shield, User, X, ArrowLeft, Trophy, Calendar, Megaphone, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 
 export default function ClubDashboard() {
@@ -17,6 +18,9 @@ export default function ClubDashboard() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [error, setError] = useState('');
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [newAnnouncement, setNewAnnouncement] = useState('');
+  const [announcementLoading, setAnnouncementLoading] = useState(false);
 
   useEffect(() => {
     useUser().then(u => {
@@ -34,11 +38,44 @@ export default function ClubDashboard() {
       const data = await apiRequest(`/clubs/${id}`);
       setClub(data.club);
       setMembers(data.members);
+      fetchAnnouncements();
     } catch (err: any) {
       console.error('Failed to fetch club details:', err);
       setError('Failed to load club details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAnnouncements = async () => {
+    try {
+      const data = await apiRequest(`/clubs/${id}/announcements`);
+      setAnnouncements(data.announcements);
+    } catch (err) {
+      console.error('Failed to fetch announcements:', err);
+    }
+  };
+
+  const handlePostAnnouncement = async () => {
+    if (!newAnnouncement.trim()) return;
+    setAnnouncementLoading(true);
+    try {
+      await apiRequest(`/clubs/${id}/announcements`, 'POST', { content: newAnnouncement });
+      setNewAnnouncement('');
+      fetchAnnouncements();
+    } catch (err: any) {
+      alert(err.message || 'Failed to post announcement');
+    } finally {
+      setAnnouncementLoading(false);
+    }
+  };
+
+  const handleReact = async (announcementId: string, type: 'up' | 'down') => {
+    try {
+      await apiRequest(`/clubs/${id}/announcements/${announcementId}/react`, 'POST', { type });
+      fetchAnnouncements();
+    } catch (err: any) {
+      alert(err.message || 'Failed to react');
     }
   };
 
@@ -217,6 +254,88 @@ export default function ClubDashboard() {
                   </CardContent>
                 </Card>
               </div>
+
+              <Card className="border-none shadow-md bg-white">
+                <CardContent className="p-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Megaphone className="w-5 h-5 text-emerald-600" /> Announcements
+                  </h2>
+                  
+                  {canInvite && (
+                    <div className="mb-6 space-y-3">
+                      <Textarea
+                        placeholder="Post an announcement to the club..."
+                        value={newAnnouncement}
+                        onChange={(e) => setNewAnnouncement(e.target.value)}
+                        className="bg-gray-50"
+                        rows={3}
+                      />
+                      <div className="flex justify-end">
+                        <Button 
+                          onClick={handlePostAnnouncement}
+                          disabled={announcementLoading || !newAnnouncement.trim()}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          {announcementLoading ? 'Posting...' : 'Post Announcement'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    {announcements.length === 0 ? (
+                      <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed text-gray-500">
+                        No announcements yet.
+                      </div>
+                    ) : (
+                      announcements.map((announcement) => {
+                        const upvotes = announcement.reactions?.filter((r: any) => r.type === 'up').length || 0;
+                        const downvotes = announcement.reactions?.filter((r: any) => r.type === 'down').length || 0;
+                        const userReaction = announcement.reactions?.find((r: any) => r.user_id === user.id)?.type;
+
+                        return (
+                          <div key={announcement.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
+                                {announcement.author?.avatar_url ? (
+                                  <img src={announcement.author.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                  announcement.author?.display_name?.charAt(0) || <User className="w-4 h-4" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 text-sm">{announcement.author?.display_name}</div>
+                                <div className="text-xs text-gray-500">{new Date(announcement.created_at).toLocaleString()}</div>
+                              </div>
+                            </div>
+                            <p className="text-gray-800 whitespace-pre-wrap mb-4">{announcement.content}</p>
+                            <div className="flex items-center gap-2 border-t pt-3">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={`gap-1.5 h-8 px-2 ${userReaction === 'up' ? 'text-emerald-600 bg-emerald-50' : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                onClick={() => handleReact(announcement.id, 'up')}
+                              >
+                                <ThumbsUp className={`w-4 h-4 ${userReaction === 'up' ? 'fill-emerald-600' : ''}`} />
+                                <span className="text-xs font-medium">{upvotes}</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={`gap-1.5 h-8 px-2 ${userReaction === 'down' ? 'text-red-600 bg-red-50' : 'text-gray-500 hover:text-red-600 hover:bg-red-50'}`}
+                                onClick={() => handleReact(announcement.id, 'down')}
+                              >
+                                <ThumbsDown className={`w-4 h-4 ${userReaction === 'down' ? 'fill-red-600' : ''}`} />
+                                <span className="text-xs font-medium">{downvotes}</span>
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
 
               <Card className="border-none shadow-md bg-white">
                 <CardContent className="p-6">

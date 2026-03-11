@@ -2275,4 +2275,144 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       }
     });
 
+    // --- Club Announcements Routes ---
+
+    // Get announcements for a club
+    router.get('/clubs/:id/announcements', authenticateToken, async (req: any, res) => {
+      try {
+        // Check if user is a member
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .neq('role', 'invited')
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only members can view announcements' });
+        }
+
+        const { data: announcements, error } = await supabase
+          .from('club_announcements')
+          .select(`
+            id, content, created_at,
+            author:author_id ( id, display_name, avatar_url ),
+            reactions:club_announcement_reactions ( user_id, type )
+          `)
+          .eq('club_id', req.params.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        res.json({ announcements });
+      } catch (error: any) {
+        console.error('Fetch announcements error:', error);
+        res.status(500).json({ error: 'Failed to fetch announcements', details: error.message });
+      }
+    });
+
+    // Create an announcement
+    router.post('/clubs/:id/announcements', authenticateToken, async (req: any, res) => {
+      const { content } = req.body;
+      if (!content) return res.status(400).json({ error: 'Content is required' });
+
+      try {
+        // Check if user is owner
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .eq('role', 'owner')
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only owners can post announcements' });
+        }
+
+        const { data: announcement, error } = await supabase
+          .from('club_announcements')
+          .insert([{
+            club_id: req.params.id,
+            author_id: req.user.id,
+            content
+          }])
+          .select(`
+            id, content, created_at,
+            author:author_id ( id, display_name, avatar_url )
+          `)
+          .single();
+
+        if (error) throw error;
+        res.json({ announcement });
+      } catch (error: any) {
+        console.error('Create announcement error:', error);
+        res.status(500).json({ error: 'Failed to create announcement', details: error.message });
+      }
+    });
+
+    // React to an announcement
+    router.post('/clubs/:id/announcements/:announcementId/react', authenticateToken, async (req: any, res) => {
+      const { type } = req.body; // 'up' or 'down'
+      if (!['up', 'down'].includes(type)) {
+        return res.status(400).json({ error: 'Invalid reaction type' });
+      }
+
+      try {
+        // Check if user is a member
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .neq('role', 'invited')
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only members can react' });
+        }
+
+        // Check if reaction already exists
+        const { data: existingReaction } = await supabase
+          .from('club_announcement_reactions')
+          .select('type')
+          .eq('announcement_id', req.params.announcementId)
+          .eq('user_id', req.user.id)
+          .maybeSingle();
+
+        if (existingReaction) {
+          if (existingReaction.type === type) {
+            // Toggle off
+            await supabase
+              .from('club_announcement_reactions')
+              .delete()
+              .eq('announcement_id', req.params.announcementId)
+              .eq('user_id', req.user.id);
+            return res.json({ message: 'Reaction removed' });
+          } else {
+            // Update type
+            await supabase
+              .from('club_announcement_reactions')
+              .update({ type })
+              .eq('announcement_id', req.params.announcementId)
+              .eq('user_id', req.user.id);
+            return res.json({ message: 'Reaction updated' });
+          }
+        } else {
+          // Insert new reaction
+          await supabase
+            .from('club_announcement_reactions')
+            .insert([{
+              announcement_id: req.params.announcementId,
+              user_id: req.user.id,
+              type
+            }]);
+          return res.json({ message: 'Reaction added' });
+        }
+      } catch (error: any) {
+        console.error('React to announcement error:', error);
+        res.status(500).json({ error: 'Failed to react', details: error.message });
+      }
+    });
+
     export default router;
