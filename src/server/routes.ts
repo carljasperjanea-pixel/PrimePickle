@@ -487,7 +487,7 @@ router.get('/admin/users', authenticateToken, async (req: any, res) => {
     let { data: users, error, count } = await query;
 
     // Fallback if mfa_enabled or is_suspended columns don't exist yet
-    if (error && error.code === 'PGRST106') {
+    if (error && (error.code === 'PGRST106' || error.code === '42703')) {
       let fallbackQuery = supabase
         .from('profiles')
         .select('id, email, display_name, full_name, role, created_at, games_played, mmr', { count: 'exact' });
@@ -524,7 +524,7 @@ router.get('/admin/users', authenticateToken, async (req: any, res) => {
     if (error) throw error;
 
     // Add computed status
-    const usersWithStatus = users.map(u => ({
+    const usersWithStatus = (users || []).map(u => ({
       ...u,
       status: u.games_played > 0 ? 'active' : 'inactive'
     }));
@@ -555,7 +555,7 @@ router.post('/admin/users/:id/toggle-mfa', authenticateToken, async (req: any, r
       .single();
 
     if (fetchError) {
-      if (fetchError.code === 'PGRST106') {
+      if (fetchError.code === 'PGRST106' || fetchError.code === '42703') {
         return res.status(400).json({ error: 'MFA column not found. Please run fix_rls.sql in Supabase.' });
       }
       throw fetchError;
@@ -567,7 +567,7 @@ router.post('/admin/users/:id/toggle-mfa', authenticateToken, async (req: any, r
       .eq('id', id);
 
     if (updateError) {
-      if (updateError.code === 'PGRST106') {
+      if (updateError.code === 'PGRST106' || updateError.code === '42703') {
         return res.status(400).json({ error: 'MFA column not found. Please run fix_rls.sql in Supabase.' });
       }
       throw updateError;
@@ -593,7 +593,7 @@ router.post('/admin/users/:id/toggle-suspend', authenticateToken, async (req: an
       .single();
 
     if (fetchError) {
-      if (fetchError.code === 'PGRST106') {
+      if (fetchError.code === 'PGRST106' || fetchError.code === '42703') {
         return res.status(400).json({ error: 'Suspended column not found. Please run fix_rls.sql in Supabase.' });
       }
       throw fetchError;
@@ -605,7 +605,7 @@ router.post('/admin/users/:id/toggle-suspend', authenticateToken, async (req: an
       .eq('id', id);
 
     if (updateError) {
-      if (updateError.code === 'PGRST106') {
+      if (updateError.code === 'PGRST106' || updateError.code === '42703') {
         return res.status(400).json({ error: 'Suspended column not found. Please run fix_rls.sql in Supabase.' });
       }
       throw updateError;
