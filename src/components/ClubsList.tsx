@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { apiRequest } from '@/lib/api';
 import { Users, LogOut, Check, X, Eye } from 'lucide-react';
 import { CreateClubDialog } from './CreateClubDialog';
-import { ClubDetailsDialog } from './ClubDetailsDialog';
 
 export function ClubsList({ currentUserId }: { currentUserId: string }) {
   const [clubs, setClubs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchClubs();
@@ -102,7 +102,7 @@ export function ClubsList({ currentUserId }: { currentUserId: string }) {
                       </>
                     ) : (
                       <>
-                        <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setSelectedClubId(club.id)}>
+                        <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => navigate(`/clubs/${club.id}`)}>
                           <Eye className="w-3 h-3" /> View
                         </Button>
                         {club.user_role !== 'owner' && (
@@ -125,7 +125,7 @@ export function ClubsList({ currentUserId }: { currentUserId: string }) {
           <h2 className="text-lg font-bold text-gray-900 mb-4">Other Clubs</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-75">
             {otherClubs.map(club => (
-              <Card key={club.id} className="overflow-hidden border-none shadow-sm bg-gray-50">
+              <Card key={club.id} className="overflow-hidden border-none shadow-sm bg-gray-50 cursor-pointer hover:opacity-100 transition-opacity" onClick={() => navigate(`/clubs/${club.id}`)}>
                 <CardContent className="p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="w-5 h-5 text-gray-400" />
@@ -143,16 +143,6 @@ export function ClubsList({ currentUserId }: { currentUserId: string }) {
           </div>
         </div>
       )}
-
-      <ClubDetailsDialog 
-        clubId={selectedClubId} 
-        isOpen={!!selectedClubId} 
-        onClose={() => {
-          setSelectedClubId(null);
-          fetchClubs(); // Refresh in case members changed
-        }}
-        currentUserId={currentUserId}
-      />
     </div>
   );
 }

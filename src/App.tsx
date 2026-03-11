@@ -12,6 +12,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import Scorer from './pages/Scorer';
 import PublicProfile from './pages/PublicProfile';
+import ClubDashboard from './pages/ClubDashboard';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/super-admin" element={<SuperAdminDashboard />} />
         <Route path="/scorer/:lobbyId" element={<Scorer />} />
         <Route path="/profile/:id" element={<PublicProfile />} />
+        <Route path="/clubs/:id" element={<ClubDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
