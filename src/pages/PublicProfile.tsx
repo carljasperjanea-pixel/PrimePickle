@@ -75,11 +75,11 @@ export default function PublicProfile() {
     setFollowLoading(true);
     try {
       if (isFollowing) {
-        await apiRequest(`/user/follow/${id}`, { method: 'DELETE' });
+        await apiRequest(`/user/follow/${id}`, 'DELETE');
         setIsFollowing(false);
         setFollowersCount(prev => Math.max(0, prev - 1));
       } else {
-        await apiRequest(`/user/follow/${id}`, { method: 'POST' });
+        await apiRequest(`/user/follow/${id}`, 'POST');
         setIsFollowing(true);
         setFollowersCount(prev => prev + 1);
       }
