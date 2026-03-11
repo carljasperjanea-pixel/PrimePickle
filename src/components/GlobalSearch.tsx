@@ -136,8 +136,12 @@ export default function GlobalSearch() {
                       className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded-lg transition-colors border border-transparent hover:border-gray-200 cursor-pointer"
                       onClick={() => handleSelectClub(club.id)}
                     >
-                      <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
-                        <Users className="w-5 h-5 text-emerald-600" />
+                      <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0 overflow-hidden">
+                        {club.photo_url ? (
+                          <img src={club.photo_url} alt={club.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Users className="w-5 h-5 text-emerald-600" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-900 truncate">{club.name}</div>

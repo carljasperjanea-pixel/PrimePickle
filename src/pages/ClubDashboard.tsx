@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, UserPlus, Shield, User, X, ArrowLeft, Trophy, Calendar, Megaphone, ThumbsUp, ThumbsDown, Pin, Trash2 } from 'lucide-react';
+import { Users, UserPlus, Shield, User, X, ArrowLeft, Trophy, Calendar, Megaphone, ThumbsUp, ThumbsDown, Pin, Trash2, Image as ImageIcon, Star } from 'lucide-react';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 
 export default function ClubDashboard() {
@@ -21,6 +21,14 @@ export default function ClubDashboard() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [announcementLoading, setAnnouncementLoading] = useState(false);
+  const [achievements, setAchievements] = useState<any[]>([]);
+  const [newAchievementTitle, setNewAchievementTitle] = useState('');
+  const [newAchievementDesc, setNewAchievementDesc] = useState('');
+  const [achievementLoading, setAchievementLoading] = useState(false);
+  const [photos, setPhotos] = useState<any[]>([]);
+  const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [newPhotoCaption, setNewPhotoCaption] = useState('');
+  const [photoLoading, setPhotoLoading] = useState(false);
 
   useEffect(() => {
     useUser().then(u => {
@@ -39,11 +47,31 @@ export default function ClubDashboard() {
       setClub(data.club);
       setMembers(data.members);
       fetchAnnouncements();
+      fetchAchievements();
+      fetchPhotos();
     } catch (err: any) {
       console.error('Failed to fetch club details:', err);
       setError('Failed to load club details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAchievements = async () => {
+    try {
+      const data = await apiRequest(`/clubs/${id}/achievements`);
+      setAchievements(data.achievements || []);
+    } catch (err) {
+      console.error('Failed to fetch achievements:', err);
+    }
+  };
+
+  const fetchPhotos = async () => {
+    try {
+      const data = await apiRequest(`/clubs/${id}/photos`);
+      setPhotos(data.photos || []);
+    } catch (err) {
+      console.error('Failed to fetch photos:', err);
     }
   };
 
@@ -95,6 +123,62 @@ export default function ClubDashboard() {
       fetchAnnouncements();
     } catch (err: any) {
       alert(err.message || 'Failed to delete announcement');
+    }
+  };
+
+  const handleAddAchievement = async () => {
+    if (!newAchievementTitle.trim()) return;
+    setAchievementLoading(true);
+    try {
+      await apiRequest(`/clubs/${id}/achievements`, 'POST', { 
+        title: newAchievementTitle,
+        description: newAchievementDesc
+      });
+      setNewAchievementTitle('');
+      setNewAchievementDesc('');
+      fetchAchievements();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add achievement');
+    } finally {
+      setAchievementLoading(false);
+    }
+  };
+
+  const handleDeleteAchievement = async (achievementId: string) => {
+    if (!confirm('Are you sure you want to delete this achievement?')) return;
+    try {
+      await apiRequest(`/clubs/${id}/achievements/${achievementId}`, 'DELETE');
+      fetchAchievements();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete achievement');
+    }
+  };
+
+  const handleAddPhoto = async () => {
+    if (!newPhotoUrl.trim()) return;
+    setPhotoLoading(true);
+    try {
+      await apiRequest(`/clubs/${id}/photos`, 'POST', { 
+        url: newPhotoUrl,
+        caption: newPhotoCaption
+      });
+      setNewPhotoUrl('');
+      setNewPhotoCaption('');
+      fetchPhotos();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add photo');
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
+  const handleDeletePhoto = async (photoId: string) => {
+    if (!confirm('Are you sure you want to delete this photo?')) return;
+    try {
+      await apiRequest(`/clubs/${id}/photos/${photoId}`, 'DELETE');
+      fetchPhotos();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete photo');
     }
   };
 
@@ -387,10 +471,144 @@ export default function ClubDashboard() {
               <Card className="border-none shadow-md bg-white">
                 <CardContent className="p-6">
                   <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-gray-500" /> Recent Club Activity
+                    <Star className="w-5 h-5 text-amber-500" /> Achievements Showcase
                   </h2>
-                  <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed text-gray-500">
-                    No recent activity to show.
+
+                  {canInvite && (
+                    <div className="mb-6 space-y-3 bg-gray-50 p-4 rounded-lg border">
+                      <Input
+                        placeholder="Achievement Title (e.g., Summer Tournament Winners)"
+                        value={newAchievementTitle}
+                        onChange={(e) => setNewAchievementTitle(e.target.value)}
+                        className="bg-white"
+                      />
+                      <Textarea
+                        placeholder="Description (optional)"
+                        value={newAchievementDesc}
+                        onChange={(e) => setNewAchievementDesc(e.target.value)}
+                        className="bg-white"
+                        rows={2}
+                      />
+                      <div className="flex justify-end">
+                        <Button 
+                          onClick={handleAddAchievement}
+                          disabled={achievementLoading || !newAchievementTitle.trim()}
+                          className="bg-amber-500 hover:bg-amber-600 text-white"
+                        >
+                          {achievementLoading ? 'Adding...' : 'Add Achievement'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    {achievements.length === 0 ? (
+                      <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed text-gray-500">
+                        No achievements yet.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {achievements.map((achievement) => (
+                          <div key={achievement.id} className="bg-amber-50/50 rounded-lg p-4 border border-amber-100 relative group">
+                            {canInvite && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-600 hover:bg-red-50"
+                                onClick={() => handleDeleteAchievement(achievement.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <div className="flex items-center gap-2 mb-2">
+                              <Trophy className="w-5 h-5 text-amber-500" />
+                              <h3 className="font-bold text-gray-900">{achievement.title}</h3>
+                            </div>
+                            {achievement.description && (
+                              <p className="text-sm text-gray-700 mb-2">{achievement.description}</p>
+                            )}
+                            <div className="text-xs text-gray-500">
+                              {new Date(achievement.date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-none shadow-md bg-white">
+                <CardContent className="p-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5 text-blue-500" /> Club Photo Album
+                  </h2>
+
+                  {canInvite && (
+                    <div className="mb-6 space-y-3 bg-gray-50 p-4 rounded-lg border">
+                      <Input
+                        placeholder="Photo URL (e.g., https://example.com/photo.jpg)"
+                        value={newPhotoUrl}
+                        onChange={(e) => setNewPhotoUrl(e.target.value)}
+                        className="bg-white"
+                      />
+                      <Input
+                        placeholder="Caption (optional)"
+                        value={newPhotoCaption}
+                        onChange={(e) => setNewPhotoCaption(e.target.value)}
+                        className="bg-white"
+                      />
+                      <div className="flex justify-end">
+                        <Button 
+                          onClick={handleAddPhoto}
+                          disabled={photoLoading || !newPhotoUrl.trim()}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          {photoLoading ? 'Uploading...' : 'Add Photo'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    {photos.length === 0 ? (
+                      <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed text-gray-500">
+                        No photos yet.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {photos.map((photo) => (
+                          <div key={photo.id} className="relative group rounded-lg overflow-hidden border border-gray-200 bg-gray-50 aspect-square">
+                            <img 
+                              src={photo.url} 
+                              alt={photo.caption || 'Club photo'} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/club/400/400';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                              {photo.caption && (
+                                <p className="text-white text-sm font-medium truncate">{photo.caption}</p>
+                              )}
+                              <p className="text-white/80 text-xs">
+                                By {photo.uploader?.display_name || 'Unknown'}
+                              </p>
+                            </div>
+                            {canInvite && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="absolute top-2 right-2 h-8 w-8 p-0 text-white bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400 hover:bg-black/70"
+                                onClick={() => handleDeletePhoto(photo.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

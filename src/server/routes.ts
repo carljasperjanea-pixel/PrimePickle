@@ -2329,17 +2329,17 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       if (!content) return res.status(400).json({ error: 'Content is required' });
 
       try {
-        // Check if user is owner
+        // Check if user is owner or admin
         const { data: member, error: memberError } = await supabase
           .from('club_members')
           .select('role')
           .eq('club_id', req.params.id)
           .eq('user_id', req.user.id)
-          .eq('role', 'owner')
+          .in('role', ['owner', 'admin'])
           .single();
 
         if (memberError || !member) {
-          return res.status(403).json({ error: 'Only owners can post announcements' });
+          return res.status(403).json({ error: 'Only owners and admins can post announcements' });
         }
 
         const { data: announcement, error } = await supabase
@@ -2430,17 +2430,17 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
     // Delete an announcement
     router.delete('/clubs/:id/announcements/:announcementId', authenticateToken, async (req: any, res) => {
       try {
-        // Check if user is owner
+        // Check if user is owner or admin
         const { data: member, error: memberError } = await supabase
           .from('club_members')
           .select('role')
           .eq('club_id', req.params.id)
           .eq('user_id', req.user.id)
-          .eq('role', 'owner')
+          .in('role', ['owner', 'admin'])
           .single();
 
         if (memberError || !member) {
-          return res.status(403).json({ error: 'Only owners can delete announcements' });
+          return res.status(403).json({ error: 'Only owners and admins can delete announcements' });
         }
 
         const { error } = await supabase
@@ -2465,17 +2465,17 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       }
 
       try {
-        // Check if user is owner
+        // Check if user is owner or admin
         const { data: member, error: memberError } = await supabase
           .from('club_members')
           .select('role')
           .eq('club_id', req.params.id)
           .eq('user_id', req.user.id)
-          .eq('role', 'owner')
+          .in('role', ['owner', 'admin'])
           .single();
 
         if (memberError || !member) {
-          return res.status(403).json({ error: 'Only owners can pin/unpin announcements' });
+          return res.status(403).json({ error: 'Only owners and admins can pin/unpin announcements' });
         }
 
         const { error } = await supabase
@@ -2489,6 +2489,182 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       } catch (error: any) {
         console.error('Pin announcement error:', error);
         res.status(500).json({ error: 'Failed to pin/unpin announcement', details: error.message });
+      }
+    });
+
+    // Get achievements for a club
+    router.get('/clubs/:id/achievements', authenticateToken, async (req: any, res) => {
+      try {
+        const { data: achievements, error } = await supabase
+          .from('club_achievements')
+          .select('*')
+          .eq('club_id', req.params.id)
+          .order('date', { ascending: false });
+
+        if (error) throw error;
+        res.json({ achievements });
+      } catch (error: any) {
+        console.error('Fetch achievements error:', error);
+        res.status(500).json({ error: 'Failed to fetch achievements', details: error.message });
+      }
+    });
+
+    // Add an achievement
+    router.post('/clubs/:id/achievements', authenticateToken, async (req: any, res) => {
+      const { title, description, date } = req.body;
+      if (!title) return res.status(400).json({ error: 'Title is required' });
+
+      try {
+        // Check if user is owner or admin
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .in('role', ['owner', 'admin'])
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only owners and admins can add achievements' });
+        }
+
+        const { data: achievement, error } = await supabase
+          .from('club_achievements')
+          .insert([{
+            club_id: req.params.id,
+            title,
+            description,
+            date: date || new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        res.json({ achievement });
+      } catch (error: any) {
+        console.error('Add achievement error:', error);
+        res.status(500).json({ error: 'Failed to add achievement', details: error.message });
+      }
+    });
+
+    // Delete an achievement
+    router.delete('/clubs/:id/achievements/:achievementId', authenticateToken, async (req: any, res) => {
+      try {
+        // Check if user is owner or admin
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .in('role', ['owner', 'admin'])
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only owners and admins can delete achievements' });
+        }
+
+        const { error } = await supabase
+          .from('club_achievements')
+          .delete()
+          .eq('id', req.params.achievementId)
+          .eq('club_id', req.params.id);
+
+        if (error) throw error;
+        res.json({ message: 'Achievement deleted successfully' });
+      } catch (error: any) {
+        console.error('Delete achievement error:', error);
+        res.status(500).json({ error: 'Failed to delete achievement', details: error.message });
+      }
+    });
+
+    // Get photos for a club
+    router.get('/clubs/:id/photos', authenticateToken, async (req: any, res) => {
+      try {
+        const { data: photos, error } = await supabase
+          .from('club_photos')
+          .select(`
+            *,
+            uploader:uploaded_by ( id, display_name, avatar_url )
+          `)
+          .eq('club_id', req.params.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        res.json({ photos });
+      } catch (error: any) {
+        console.error('Fetch photos error:', error);
+        res.status(500).json({ error: 'Failed to fetch photos', details: error.message });
+      }
+    });
+
+    // Add a photo
+    router.post('/clubs/:id/photos', authenticateToken, async (req: any, res) => {
+      const { url, caption } = req.body;
+      if (!url) return res.status(400).json({ error: 'URL is required' });
+
+      try {
+        // Check if user is owner or admin
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .in('role', ['owner', 'admin'])
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only owners and admins can add photos' });
+        }
+
+        const { data: photo, error } = await supabase
+          .from('club_photos')
+          .insert([{
+            club_id: req.params.id,
+            url,
+            caption,
+            uploaded_by: req.user.id
+          }])
+          .select(`
+            *,
+            uploader:uploaded_by ( id, display_name, avatar_url )
+          `)
+          .single();
+
+        if (error) throw error;
+        res.json({ photo });
+      } catch (error: any) {
+        console.error('Add photo error:', error);
+        res.status(500).json({ error: 'Failed to add photo', details: error.message });
+      }
+    });
+
+    // Delete a photo
+    router.delete('/clubs/:id/photos/:photoId', authenticateToken, async (req: any, res) => {
+      try {
+        // Check if user is owner or admin
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .in('role', ['owner', 'admin'])
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only owners and admins can delete photos' });
+        }
+
+        const { error } = await supabase
+          .from('club_photos')
+          .delete()
+          .eq('id', req.params.photoId)
+          .eq('club_id', req.params.id);
+
+        if (error) throw error;
+        res.json({ message: 'Photo deleted successfully' });
+      } catch (error: any) {
+        console.error('Delete photo error:', error);
+        res.status(500).json({ error: 'Failed to delete photo', details: error.message });
       }
     });
 

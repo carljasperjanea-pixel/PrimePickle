@@ -210,6 +210,22 @@ async function checkDb() {
   } else {
     console.log('Success! "notifications" table exists.');
   }
+  // Check for 'club_achievements' table
+  console.log('Checking schema for "club_achievements"...');
+  const { error: achievementsError } = await supabase
+    .from('club_achievements')
+    .select('id')
+    .limit(1);
+
+  if (achievementsError) {
+    console.error('Error checking "club_achievements":', achievementsError);
+    if (achievementsError.code === '42P01' || achievementsError.code === 'PGRST205') { // Undefined table
+      console.error('--> CONCLUSION: The "club_achievements" table does not exist.');
+      console.error('--> ACTION: Run "src/server/migration_add_club_customization.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "club_achievements" table exists.');
+  }
 }
 
 checkDb();
