@@ -271,29 +271,40 @@ router.put('/user/profile', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Search Players
-router.get('/players/search', authenticateToken, async (req: any, res) => {
+// Search Players and Clubs
+router.get('/search', authenticateToken, async (req: any, res) => {
   try {
     const { q } = req.query;
     if (!q || typeof q !== 'string' || q.length < 2) {
-      return res.json({ players: [] });
+      return res.json({ players: [], clubs: [] });
     }
 
-    const { data: players, error } = await supabase
+    const { data: players, error: playersError } = await supabase
       .from('profiles')
       .select('id, display_name, avatar_url, mmr')
       .ilike('display_name', `%${q}%`)
-      .limit(10);
+      .limit(5);
 
-    if (error) {
-      console.error('Player search error:', error);
+    if (playersError) {
+      console.error('Player search error:', playersError);
       return res.status(500).json({ error: 'Failed to search players' });
     }
 
-    res.json({ players: players || [] });
+    const { data: clubs, error: clubsError } = await supabase
+      .from('clubs')
+      .select('id, name, description')
+      .ilike('name', `%${q}%`)
+      .limit(5);
+
+    if (clubsError) {
+      console.error('Club search error:', clubsError);
+      return res.status(500).json({ error: 'Failed to search clubs' });
+    }
+
+    res.json({ players: players || [], clubs: clubs || [] });
   } catch (error: any) {
-    console.error('Player search error:', error);
-    res.status(500).json({ error: 'Failed to search players' });
+    console.error('Search error:', error);
+    res.status(500).json({ error: 'Failed to search' });
   }
 });
 

@@ -7,7 +7,7 @@ import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode,
 import { useNavigate } from 'react-router-dom';
 import { UserDirectory } from '@/components/UserDirectory';
 import { AdminMatchHistory } from '@/components/AdminMatchHistory';
-import PlayerSearch from '@/components/PlayerSearch';
+import GlobalSearch from '@/components/GlobalSearch';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { SendNotificationDialog } from '@/components/SendNotificationDialog';
 
@@ -171,7 +171,7 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-4 w-full sm:w-auto">
             <SendNotificationDialog userRole={user.role} />
             <div className="w-full sm:w-64">
-              <PlayerSearch />
+              <GlobalSearch />
             </div>
             {activeTab === 'lobbies' && (
               <Button 

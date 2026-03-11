@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
 import RatingPrompt from '@/components/RatingPrompt';
-import PlayerSearch from '@/components/PlayerSearch';
+import GlobalSearch from '@/components/GlobalSearch';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { ClubsList } from '@/components/ClubsList';
 
@@ -425,7 +425,7 @@ export default function PlayerDashboard() {
         
         {/* Left Sidebar: Profile */}
         <div className="lg:col-span-1 space-y-6">
-          <PlayerSearch />
+          <GlobalSearch />
           <Card className="border-none shadow-md overflow-hidden bg-white">
             <CardContent className="p-6 relative">
               <div className="absolute top-6 right-6">
