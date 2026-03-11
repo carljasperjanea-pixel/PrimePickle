@@ -177,6 +177,23 @@ async function checkDb() {
   } else {
     console.log('Success! "audit_logs" table exists.');
   }
+
+  // Check for 'followers' table
+  console.log('Checking schema for "followers"...');
+  const { error: followersError } = await supabase
+    .from('followers')
+    .select('follower_id')
+    .limit(1);
+
+  if (followersError) {
+    console.error('Error checking "followers":', followersError);
+    if (followersError.code === '42P01') { // Undefined table
+      console.error('--> CONCLUSION: The "followers" table does not exist.');
+      console.error('--> ACTION: Run "src/server/migration_add_followers.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "followers" table exists.');
+  }
 }
 
 checkDb();

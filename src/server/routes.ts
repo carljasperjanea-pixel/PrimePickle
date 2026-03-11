@@ -405,6 +405,109 @@ router.get('/public/matches/:id', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Follow a user
+router.post('/user/follow/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const followerId = req.user.id;
+    const followingId = req.params.id;
+
+    if (followerId === followingId) {
+      return res.status(400).json({ error: 'You cannot follow yourself' });
+    }
+
+    const { error } = await supabase
+      .from('followers')
+      .insert([{ follower_id: followerId, following_id: followingId }]);
+
+    if (error) {
+      if (error.code === '23505') { // Unique violation
+        return res.status(400).json({ error: 'Already following this user' });
+      }
+      throw error;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Follow user error:', error);
+    res.status(500).json({ error: 'Failed to follow user' });
+  }
+});
+
+// Unfollow a user
+router.delete('/user/follow/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const followerId = req.user.id;
+    const followingId = req.params.id;
+
+    const { error } = await supabase
+      .from('followers')
+      .delete()
+      .match({ follower_id: followerId, following_id: followingId });
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Unfollow user error:', error);
+    res.status(500).json({ error: 'Failed to unfollow user' });
+  }
+});
+
+// Check if following
+router.get('/user/is-following/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const followerId = req.user.id;
+    const followingId = req.params.id;
+
+    const { data, error } = await supabase
+      .from('followers')
+      .select('created_at')
+      .match({ follower_id: followerId, following_id: followingId })
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // Ignore not found error
+
+    res.json({ isFollowing: !!data });
+  } catch (error) {
+    console.error('Check following error:', error);
+    res.status(500).json({ error: 'Failed to check following status' });
+  }
+});
+
+// Get followers count
+router.get('/user/followers-count/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const { count, error } = await supabase
+      .from('followers')
+      .select('*', { count: 'exact', head: true })
+      .eq('following_id', req.params.id);
+
+    if (error) throw error;
+
+    res.json({ count: count || 0 });
+  } catch (error) {
+    console.error('Get followers count error:', error);
+    res.status(500).json({ error: 'Failed to get followers count' });
+  }
+});
+
+// Get following count
+router.get('/user/following-count/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const { count, error } = await supabase
+      .from('followers')
+      .select('*', { count: 'exact', head: true })
+      .eq('follower_id', req.params.id);
+
+    if (error) throw error;
+
+    res.json({ count: count || 0 });
+  } catch (error) {
+    console.error('Get following count error:', error);
+    res.status(500).json({ error: 'Failed to get following count' });
+  }
+});
+
 // Upload User Avatar
 router.post('/user/avatar', authenticateToken, upload.single('avatar'), async (req: any, res) => {
   if (!req.file) {

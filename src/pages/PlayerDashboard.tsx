@@ -31,6 +31,8 @@ export default function PlayerDashboard() {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
   
   // Rating State
   const [pendingRatingMatch, setPendingRatingMatch] = useState<any>(null);
@@ -77,6 +79,7 @@ export default function PlayerDashboard() {
         fetchPendingRatings();
         fetchMatches();
         fetchGears();
+        fetchFollowStats(u.id);
       }
     });
 
@@ -114,6 +117,19 @@ export default function PlayerDashboard() {
       }
     }
   }, [currentLobby?.status, currentLobby?.started_at]);
+
+  const fetchFollowStats = async (userId: string) => {
+    try {
+      const [followersData, followingData] = await Promise.all([
+        apiRequest(`/user/followers-count/${userId}`),
+        apiRequest(`/user/following-count/${userId}`)
+      ]);
+      setFollowersCount(followersData.count);
+      setFollowingCount(followingData.count);
+    } catch (e) {
+      console.error("Failed to fetch follow stats", e);
+    }
+  };
 
   const fetchGears = async () => {
     try {
@@ -544,6 +560,17 @@ export default function PlayerDashboard() {
                   onChange={handleAvatarUpload}
                 />
                 {isUploading && <div className="text-xs text-blue-600 font-medium animate-pulse">Uploading...</div>}
+                
+                <div className="flex gap-4 mt-4 text-sm">
+                  <div className="text-center">
+                    <span className="font-bold text-gray-900 block">{followersCount}</span>
+                    <span className="text-gray-500">Followers</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="font-bold text-gray-900 block">{followingCount}</span>
+                    <span className="text-gray-500">Following</span>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-4">

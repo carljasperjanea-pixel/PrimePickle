@@ -7,6 +7,7 @@ import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode,
 import { useNavigate } from 'react-router-dom';
 import { UserDirectory } from '@/components/UserDirectory';
 import { AdminMatchHistory } from '@/components/AdminMatchHistory';
+import PlayerSearch from '@/components/PlayerSearch';
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -164,16 +165,21 @@ export default function AdminDashboard() {
             </button>
           </div>
           
-          {activeTab === 'lobbies' && (
-            <Button 
-              onClick={createLobby} 
-              disabled={isCreating}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-full px-6 shadow-md transition-all hover:shadow-lg"
-            >
-              {isCreating ? <Activity className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-              {isCreating ? 'Creating...' : 'Open New Court / Lobby'}
-            </Button>
-          )}
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            <div className="w-full sm:w-64">
+              <PlayerSearch />
+            </div>
+            {activeTab === 'lobbies' && (
+              <Button 
+                onClick={createLobby} 
+                disabled={isCreating}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-full px-6 shadow-md transition-all hover:shadow-lg whitespace-nowrap"
+              >
+                {isCreating ? <Activity className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                {isCreating ? 'Creating...' : 'Open New Court / Lobby'}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Tab Content */}

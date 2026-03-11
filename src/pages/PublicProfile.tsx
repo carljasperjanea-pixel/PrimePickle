@@ -13,6 +13,11 @@ export default function PublicProfile() {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followLoading, setFollowLoading] = useState(false);
+  const currentUserId = localStorage.getItem('user_id'); // Assuming user ID is stored here, or we can just try the API
 
   useEffect(() => {
     if (id) {
@@ -44,11 +49,44 @@ export default function PublicProfile() {
         setMatches([]);
       }
 
+      // Fetch follow stats
+      try {
+        const [isFollowingData, followersData, followingData] = await Promise.all([
+          apiRequest(`/user/is-following/${id}`),
+          apiRequest(`/user/followers-count/${id}`),
+          apiRequest(`/user/following-count/${id}`)
+        ]);
+        setIsFollowing(isFollowingData.isFollowing);
+        setFollowersCount(followersData.count);
+        setFollowingCount(followingData.count);
+      } catch (e) {
+        console.warn("Failed to load follow stats", e);
+      }
+
     } catch (err: any) {
       console.error("Failed to fetch profile", err);
       setError("Failed to load profile. User might not exist.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFollowToggle = async () => {
+    setFollowLoading(true);
+    try {
+      if (isFollowing) {
+        await apiRequest(`/user/follow/${id}`, { method: 'DELETE' });
+        setIsFollowing(false);
+        setFollowersCount(prev => Math.max(0, prev - 1));
+      } else {
+        await apiRequest(`/user/follow/${id}`, { method: 'POST' });
+        setIsFollowing(true);
+        setFollowersCount(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error('Failed to toggle follow status', error);
+    } finally {
+      setFollowLoading(false);
     }
   };
 
@@ -85,6 +123,28 @@ export default function PublicProfile() {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">{user.display_name}</h2>
                 {user.full_name && <p className="text-gray-500">{user.full_name}</p>}
+                
+                <div className="flex gap-4 mt-4 text-sm">
+                  <div className="text-center">
+                    <span className="font-bold text-gray-900 block">{followersCount}</span>
+                    <span className="text-gray-500">Followers</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="font-bold text-gray-900 block">{followingCount}</span>
+                    <span className="text-gray-500">Following</span>
+                  </div>
+                </div>
+
+                {id !== currentUserId && (
+                  <Button 
+                    className="mt-6 w-full" 
+                    variant={isFollowing ? "outline" : "default"}
+                    onClick={handleFollowToggle}
+                    disabled={followLoading}
+                  >
+                    {isFollowing ? 'Unfollow' : 'Follow'}
+                  </Button>
+                )}
               </div>
 
               <div className="space-y-4">
