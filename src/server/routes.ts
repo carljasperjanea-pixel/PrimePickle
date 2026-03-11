@@ -292,7 +292,7 @@ router.get('/search', authenticateToken, async (req: any, res) => {
 
     const { data: clubs, error: clubsError } = await supabase
       .from('clubs')
-      .select('id, name, description')
+      .select('id, name, description, photo_url')
       .ilike('name', `%${q}%`)
       .limit(5);
 
@@ -2016,7 +2016,7 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
         const { data: clubs, error } = await supabase
           .from('clubs')
           .select(`
-            id, name, description, owner_id, created_at,
+            id, name, description, photo_url, owner_id, created_at,
             club_members ( user_id, role )
           `)
           .order('created_at', { ascending: false });
@@ -2096,6 +2096,43 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       } catch (error: any) {
         console.error('Fetch club details error:', error);
         res.status(500).json({ error: 'Failed to fetch club details', details: error.message });
+      }
+    });
+
+    // Update club details
+    router.put('/clubs/:id', authenticateToken, async (req: any, res) => {
+      try {
+        // Check if user is owner
+        const { data: member, error: checkError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .single();
+
+        if (checkError || member?.role !== 'owner') {
+          return res.status(403).json({ error: 'Only owners can update club details' });
+        }
+
+        const updates: any = {};
+        if (req.body.name !== undefined) updates.name = req.body.name;
+        if (req.body.description !== undefined) updates.description = req.body.description;
+        if (req.body.photo_url !== undefined) updates.photo_url = req.body.photo_url;
+        if (req.body.achievements !== undefined) updates.achievements = req.body.achievements;
+
+        const { data: club, error: updateError } = await supabase
+          .from('clubs')
+          .update(updates)
+          .eq('id', req.params.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        res.json({ club });
+      } catch (error: any) {
+        console.error('Update club details error:', error);
+        res.status(500).json({ error: 'Failed to update club details', details: error.message });
       }
     });
 
