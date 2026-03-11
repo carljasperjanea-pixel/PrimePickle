@@ -104,6 +104,19 @@ export function TournamentManager() {
     }
   };
 
+  const handleDeleteTournament = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this tournament? This action cannot be undone.')) return;
+    try {
+      await apiRequest(`/tournaments/${id}`, 'DELETE');
+      if (selectedTournament?.tournament?.id === id) {
+        setSelectedTournament(null);
+      }
+      fetchTournaments();
+    } catch (e) {
+      alert('Failed to delete tournament');
+    }
+  };
+
   if (selectedTournament) {
     const { tournament, participants, matches } = selectedTournament;
     
@@ -188,11 +201,16 @@ export function TournamentManager() {
               {tournament.status.replace('_', ' ')}
             </span>
           </div>
-          {tournament.status === 'draft' && (
-            <Button onClick={handleStartTournament} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-              <Play className="w-4 h-4" /> Start Tournament
+          <div className="flex items-center gap-2">
+            {tournament.status === 'draft' && (
+              <Button onClick={handleStartTournament} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                <Play className="w-4 h-4" /> Start Tournament
+              </Button>
+            )}
+            <Button variant="destructive" onClick={() => handleDeleteTournament(tournament.id)} className="gap-2">
+              <X className="w-4 h-4" /> Delete Tournament
             </Button>
-          )}
+          </div>
         </div>
 
         {tournament.status === 'draft' ? (
@@ -486,18 +504,31 @@ export function TournamentManager() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tournaments.map(t => (
           <Card key={t.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => fetchTournamentDetails(t.id)}>
-            <CardContent className="p-6">
+            <CardContent className="p-6 relative group">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-2 bg-emerald-100 rounded-lg">
                   <Trophy className="w-6 h-6 text-emerald-700" />
                 </div>
-                <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${
-                  t.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
-                  t.status === 'in_progress' ? 'bg-emerald-100 text-emerald-800' :
-                  'bg-blue-100 text-blue-800'
-                }`}>
-                  {t.status.replace('_', ' ')}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${
+                    t.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
+                    t.status === 'in_progress' ? 'bg-emerald-100 text-emerald-800' :
+                    'bg-blue-100 text-blue-800'
+                  }`}>
+                    {t.status.replace('_', ' ')}
+                  </span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteTournament(t.id);
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
               <h3 className="font-bold text-lg mb-1 truncate">{t.name}</h3>
               <p className="text-sm text-gray-500 capitalize">{t.format.replace('_', ' ')}</p>

@@ -2923,6 +2923,22 @@ import { generateTournamentMatches } from './tournament-generator.js';
       }
     });
 
+    // Delete tournament
+    router.delete('/tournaments/:id', authenticateToken, async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { error } = await supabase
+          .from('tournaments')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        res.json({ success: true });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to delete tournament', details: error.message });
+      }
+    });
+
     // Start tournament
     router.post('/tournaments/:id/start', authenticateToken, async (req: any, res) => {
       try {
