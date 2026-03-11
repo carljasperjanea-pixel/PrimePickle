@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { apiRequest } from '@/lib/api';
-import { Users, LogOut, Check, X, Eye } from 'lucide-react';
+import { Users, LogOut, Check, X, Eye, Search } from 'lucide-react';
 import { CreateClubDialog } from './CreateClubDialog';
 
 export function ClubsList({ currentUserId }: { currentUserId: string }) {
   const [clubs, setClubs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,7 +50,12 @@ export function ClubsList({ currentUserId }: { currentUserId: string }) {
   if (loading) return <div className="p-4 text-center text-gray-500">Loading clubs...</div>;
 
   const myClubs = clubs.filter(c => c.is_member || c.is_invited);
-  const otherClubs = clubs.filter(c => !c.is_member && !c.is_invited);
+  
+  const otherClubs = clubs.filter(c => !c.is_member && !c.is_invited).filter(c => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return c.name.toLowerCase().includes(query) || (c.description && c.description.toLowerCase().includes(query));
+  });
 
   return (
     <div className="space-y-6">
@@ -120,9 +127,22 @@ export function ClubsList({ currentUserId }: { currentUserId: string }) {
         </div>
       )}
 
-      {otherClubs.length > 0 && (
-        <div className="pt-6 border-t">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Other Clubs</h2>
+      <div className="pt-6 border-t">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Other Clubs</h2>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+            <Input
+              type="text"
+              placeholder="Search clubs..."
+              className="pl-9 bg-white"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+        
+        {otherClubs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-75">
             {otherClubs.map(club => (
               <Card key={club.id} className="overflow-hidden border-none shadow-sm bg-gray-50 cursor-pointer hover:opacity-100 transition-opacity" onClick={() => navigate(`/clubs/${club.id}`)}>
@@ -141,8 +161,12 @@ export function ClubsList({ currentUserId }: { currentUserId: string }) {
               </Card>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed text-gray-500">
+            {searchQuery ? 'No clubs found matching your search.' : 'No other clubs available.'}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
