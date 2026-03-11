@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon } from 'lucide-react';
+import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { SendNotificationDialog } from '@/components/SendNotificationDialog';
@@ -75,6 +75,13 @@ export default function SuperAdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <Button 
+              variant="ghost" 
+              className="text-white hover:bg-white/20 p-2 h-auto rounded-full"
+              onClick={() => navigate('/messages')}
+            >
+              <MessageSquare className="w-5 h-5" />
+            </Button>
             <NotificationsPopover />
             <Button 
               variant="secondary" 

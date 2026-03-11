@@ -226,6 +226,22 @@ async function checkDb() {
   } else {
     console.log('Success! "club_achievements" table exists.');
   }
+  // Check for 'messages' table
+  console.log('Checking schema for "messages"...');
+  const { error: messagesError } = await supabase
+    .from('messages')
+    .select('id')
+    .limit(1);
+
+  if (messagesError) {
+    console.error('Error checking "messages":', messagesError);
+    if (messagesError.code === '42P01' || messagesError.code === 'PGRST205') { // Undefined table
+      console.error('--> CONCLUSION: The "messages" table does not exist.');
+      console.error('--> ACTION: Run "src/server/migration_add_messages.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "messages" table exists.');
+  }
 }
 
 checkDb();

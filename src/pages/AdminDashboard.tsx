@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode, Clock, X, Search } from 'lucide-react';
+import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode, Clock, X, Search, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UserDirectory } from '@/components/UserDirectory';
 import { AdminMatchHistory } from '@/components/AdminMatchHistory';
@@ -95,6 +95,13 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <Button 
+              variant="ghost" 
+              className="text-white hover:bg-white/20 p-2 h-auto rounded-full"
+              onClick={() => navigate('/messages')}
+            >
+              <MessageSquare className="w-5 h-5" />
+            </Button>
             <NotificationsPopover />
             {user?.role === 'super_admin' && (
               <Button 

@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { apiRequest, useUser } from '@/lib/api';
-import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload, Eye, EyeOff, Shield, Plus, Trash2, Star, Image as ImageIcon } from 'lucide-react';
+import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload, Eye, EyeOff, Shield, Plus, Trash2, Star, Image as ImageIcon, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
@@ -409,6 +409,13 @@ export default function PlayerDashboard() {
             <h1 className="text-2xl font-bold leading-tight">Player Dashboard</h1>
           </div>
           <div className="flex items-center gap-4">
+            <Button 
+              variant="ghost" 
+              className="text-white hover:bg-white/20 p-2 h-auto rounded-full"
+              onClick={() => navigate('/messages')}
+            >
+              <MessageSquare className="w-5 h-5" />
+            </Button>
             <NotificationsPopover />
             <Button 
               variant="secondary" 

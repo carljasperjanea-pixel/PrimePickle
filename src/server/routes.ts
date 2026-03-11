@@ -2668,4 +2668,147 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       }
     });
 
+    // --- MESSAGES ROUTES ---
+
+    // Get conversations (list of users the current user has messaged with)
+    router.get('/messages/conversations', authenticateToken, async (req: any, res) => {
+      try {
+        const userId = req.user.id;
+
+        // Get all messages where user is sender or receiver
+        const { data: messages, error } = await supabase
+          .from('messages')
+          .select(`
+            id,
+            content,
+            created_at,
+            read_at,
+            sender_id,
+            receiver_id,
+            sender:profiles!sender_id(id, display_name, avatar_url),
+            receiver:profiles!receiver_id(id, display_name, avatar_url)
+          `)
+          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Group by conversation partner
+        const conversationsMap = new Map();
+        
+        messages?.forEach((msg: any) => {
+          const partnerId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
+          const partner = msg.sender_id === userId ? msg.receiver : msg.sender;
+          
+          if (!conversationsMap.has(partnerId)) {
+            conversationsMap.set(partnerId, {
+              partner,
+              lastMessage: msg,
+              unreadCount: (msg.receiver_id === userId && !msg.read_at) ? 1 : 0
+            });
+          } else {
+            const conv = conversationsMap.get(partnerId);
+            if (msg.receiver_id === userId && !msg.read_at) {
+              conv.unreadCount += 1;
+            }
+          }
+        });
+
+        const conversations = Array.from(conversationsMap.values());
+        res.json({ conversations });
+      } catch (error: any) {
+        console.error('Fetch conversations error:', error);
+        res.status(500).json({ error: 'Failed to fetch conversations', details: error.message });
+      }
+    });
+
+    // Get messages with a specific user
+    router.get('/messages/:userId', authenticateToken, async (req: any, res) => {
+      try {
+        const currentUserId = req.user.id;
+        const otherUserId = req.params.userId;
+
+        const { data: messages, error } = await supabase
+          .from('messages')
+          .select(`
+            id,
+            content,
+            created_at,
+            read_at,
+            sender_id,
+            receiver_id
+          `)
+          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        // Mark unread messages as read
+        const unreadMessages = messages?.filter(m => m.receiver_id === currentUserId && !m.read_at) || [];
+        if (unreadMessages.length > 0) {
+          const unreadIds = unreadMessages.map(m => m.id);
+          await supabase
+            .from('messages')
+            .update({ read_at: new Date().toISOString() })
+            .in('id', unreadIds);
+        }
+
+        res.json({ messages });
+      } catch (error: any) {
+        console.error('Fetch messages error:', error);
+        res.status(500).json({ error: 'Failed to fetch messages', details: error.message });
+      }
+    });
+
+    // Send a message
+    router.post('/messages', authenticateToken, async (req: any, res) => {
+      try {
+        const { receiverId, content } = req.body;
+        const senderId = req.user.id;
+
+        if (!receiverId || !content) {
+          return res.status(400).json({ error: 'Receiver ID and content are required' });
+        }
+
+        const { data: message, error } = await supabase
+          .from('messages')
+          .insert([{
+            sender_id: senderId,
+            receiver_id: receiverId,
+            content
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        res.json({ message });
+      } catch (error: any) {
+        console.error('Send message error:', error);
+        res.status(500).json({ error: 'Failed to send message', details: error.message });
+      }
+    });
+
+    // Search users to message (players and admins)
+    router.get('/users/search', authenticateToken, async (req: any, res) => {
+      try {
+        const { q } = req.query;
+        if (!q || q.length < 2) {
+          return res.json({ users: [] });
+        }
+
+        const { data: users, error } = await supabase
+          .from('profiles')
+          .select('id, display_name, avatar_url, role')
+          .ilike('display_name', `%${q}%`)
+          .neq('id', req.user.id)
+          .limit(10);
+
+        if (error) throw error;
+        res.json({ users });
+      } catch (error: any) {
+        console.error('Search users error:', error);
+        res.status(500).json({ error: 'Failed to search users', details: error.message });
+      }
+    });
+
     export default router;
