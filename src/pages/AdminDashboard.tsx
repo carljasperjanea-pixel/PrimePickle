@@ -6,12 +6,13 @@ import { apiRequest, useUser } from '@/lib/api';
 import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode, Clock, X, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UserDirectory } from '@/components/UserDirectory';
+import { AdminMatchHistory } from '@/components/AdminMatchHistory';
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [lobbies, setLobbies] = useState<any[]>([]);
   const [qrLobby, setQrLobby] = useState<any>(null); // Lobby to show QR for
-  const [activeTab, setActiveTab] = useState<'lobbies' | 'directory'>('lobbies');
+  const [activeTab, setActiveTab] = useState<'lobbies' | 'directory' | 'history'>('lobbies');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -155,6 +156,12 @@ export default function AdminDashboard() {
             >
               User Directory
             </button>
+            <button 
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'history' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+              onClick={() => setActiveTab('history')}
+            >
+              Match History
+            </button>
           </div>
           
           {activeTab === 'lobbies' && (
@@ -170,7 +177,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'lobbies' ? (
+        {activeTab === 'lobbies' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {lobbies.filter(l => l.status !== 'completed').map((lobby, index) => (
               <LobbyCard 
@@ -182,9 +189,11 @@ export default function AdminDashboard() {
               />
             ))}
           </div>
-        ) : (
-          <UserDirectory />
         )}
+        
+        {activeTab === 'directory' && <UserDirectory />}
+        
+        {activeTab === 'history' && <AdminMatchHistory />}
       </main>
 
       {/* QR Code Modal */}

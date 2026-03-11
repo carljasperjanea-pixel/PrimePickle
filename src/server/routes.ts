@@ -636,6 +636,78 @@ router.post('/admin/users/:id/reset-password', authenticateToken, async (req: an
   }
 });
 
+// Get Match History for Admin
+router.get('/admin/matches', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    const { page = '1', limit = '10' } = req.query;
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    // Fetch matches with pagination
+    const { data: matches, error: mError, count } = await supabase
+      .from('matches')
+      .select(`
+        id,
+        lobby_id,
+        winner_team,
+        score,
+        mmr_delta,
+        completed_at
+      `, { count: 'exact' })
+      .order('completed_at', { ascending: false })
+      .range(offset, offset + limitNum - 1);
+
+    if (mError) throw mError;
+
+    if (!matches || matches.length === 0) {
+      return res.json({ matches: [], total: 0, page: pageNum, limit: limitNum, totalPages: 0 });
+    }
+
+    // Fetch players for these matches
+    const { data: allPlayers, error: apError } = await supabase
+      .from('lobby_players')
+      .select(`
+        lobby_id,
+        team,
+        profiles (
+          id,
+          display_name,
+          avatar_url
+        )
+      `)
+      .in('lobby_id', matches.map((m: any) => m.lobby_id));
+
+    if (apError) throw apError;
+
+    // Combine data
+    const matchesWithPlayers = matches.map((match: any) => {
+      const players = allPlayers?.filter((p: any) => p.lobby_id === match.lobby_id) || [];
+      const teamA = players.filter((p: any) => p.team === 'A').map((p: any) => p.profiles);
+      const teamB = players.filter((p: any) => p.team === 'B').map((p: any) => p.profiles);
+      
+      return {
+        ...match,
+        teamA,
+        teamB
+      };
+    });
+
+    res.json({
+      matches: matchesWithPlayers,
+      total: count || 0,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil((count || 0) / limitNum)
+    });
+  } catch (error) {
+    console.error('Fetch admin match history error:', error);
+    res.status(500).json({ error: 'Failed to fetch match history' });
+  }
+});
+
 // Get Lobbies (Admin: all active, Player: joined)
 router.get('/lobbies', authenticateToken, async (req: any, res) => {
   try {
