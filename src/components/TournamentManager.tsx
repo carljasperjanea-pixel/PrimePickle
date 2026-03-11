@@ -249,18 +249,80 @@ export function TournamentManager() {
           </div>
         ) : (
           <div className="space-y-8 bg-white p-6 rounded-xl border shadow-sm">
-            {tournament.format === 'round_robin' ? (
-              <div className="space-y-8">
-                {rounds.map((round: any, idx: number) => (
-                  <div key={idx} className="space-y-4">
-                    <h3 className="text-lg font-bold text-gray-800 border-b pb-2">{round.name}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {round.matches.map((match: any) => renderMatch(match))}
+            {tournament.format === 'round_robin' ? (() => {
+              const standings = participants?.map((p: any) => {
+                let played = 0;
+                let won = 0;
+                let lost = 0;
+                matches?.forEach((m: any) => {
+                  if (m.player1_id === p.profile_id || m.player2_id === p.profile_id) {
+                    if (m.winner_id) {
+                      played++;
+                      if (m.winner_id === p.profile_id) won++;
+                      else lost++;
+                    }
+                  }
+                });
+                return { ...p, played, won, lost };
+              }).sort((a: any, b: any) => b.won - a.won || a.lost - b.lost) || [];
+
+              return (
+                <div className="space-y-8">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-yellow-500" /> Standings
+                    </h3>
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-600 font-medium border-b">
+                          <tr>
+                            <th className="px-4 py-3 text-center w-16">Rank</th>
+                            <th className="px-4 py-3">Player</th>
+                            <th className="px-4 py-3 text-center">Played</th>
+                            <th className="px-4 py-3 text-center">Won</th>
+                            <th className="px-4 py-3 text-center">Lost</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y bg-white">
+                          {standings.map((s: any, idx: number) => (
+                            <tr key={s.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 font-bold text-center">{idx + 1}</td>
+                              <td className="px-4 py-3 flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold overflow-hidden text-xs">
+                                  {s.profiles.avatar_url ? (
+                                    <img src={s.profiles.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                                  ) : (
+                                    s.profiles.display_name?.charAt(0)
+                                  )}
+                                </div>
+                                <span className="font-medium">{s.profiles.display_name}</span>
+                              </td>
+                              <td className="px-4 py-3 text-center">{s.played}</td>
+                              <td className="px-4 py-3 text-center text-emerald-600 font-bold">{s.won}</td>
+                              <td className="px-4 py-3 text-center text-red-600">{s.lost}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : tournament.format === 'double_elimination' ? (
+
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">Matches</h3>
+                    <div className="space-y-6">
+                      {rounds.map((round: any, idx: number) => (
+                        <div key={idx} className="space-y-4">
+                          <h4 className="text-md font-bold text-gray-600 border-b pb-2">{round.name}</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {round.matches.map((match: any) => renderMatch(match))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })() : tournament.format === 'double_elimination' ? (
               <div className="space-y-12">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
