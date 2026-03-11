@@ -5,15 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, UserPlus, Shield, User, X, ArrowLeft, Trophy, Calendar, Megaphone, ThumbsUp, ThumbsDown, Pin, Trash2, Edit2, Image as ImageIcon, Plus, Star } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Users, UserPlus, Shield, User, X, ArrowLeft, Trophy, Calendar, Megaphone, ThumbsUp, ThumbsDown, Pin, Trash2 } from 'lucide-react';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 
 export default function ClubDashboard() {
@@ -29,17 +21,6 @@ export default function ClubDashboard() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [announcementLoading, setAnnouncementLoading] = useState(false);
-
-  // Edit Club State
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({
-    name: '',
-    description: '',
-    photo_url: '',
-    achievements: [] as string[]
-  });
-  const [newAchievement, setNewAchievement] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     useUser().then(u => {
@@ -57,12 +38,6 @@ export default function ClubDashboard() {
       const data = await apiRequest(`/clubs/${id}`);
       setClub(data.club);
       setMembers(data.members);
-      setEditForm({
-        name: data.club.name || '',
-        description: data.club.description || '',
-        photo_url: data.club.photo_url || '',
-        achievements: data.club.achievements || []
-      });
       fetchAnnouncements();
     } catch (err: any) {
       console.error('Failed to fetch club details:', err);
@@ -123,38 +98,6 @@ export default function ClubDashboard() {
     }
   };
 
-  const handleSaveClub = async () => {
-    setIsSaving(true);
-    try {
-      await apiRequest(`/clubs/${id}`, 'PUT', editForm);
-      setIsEditOpen(false);
-      fetchClubDetails();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update club');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleAddAchievement = () => {
-    if (newAchievement.trim()) {
-      setEditForm({
-        ...editForm,
-        achievements: [...editForm.achievements, newAchievement.trim()]
-      });
-      setNewAchievement('');
-    }
-  };
-
-  const handleRemoveAchievement = (index: number) => {
-    const newAchievements = [...editForm.achievements];
-    newAchievements.splice(index, 1);
-    setEditForm({
-      ...editForm,
-      achievements: newAchievements
-    });
-  };
-
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
     setInviteLoading(true);
@@ -201,7 +144,7 @@ export default function ClubDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* Header */}
-      <header className="bg-gradient-to-r from-emerald-700 to-teal-600 text-white p-6 shadow-lg relative">
+      <header className="bg-gradient-to-r from-emerald-700 to-teal-600 text-white p-6 shadow-lg">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
             <Button 
@@ -211,102 +154,14 @@ export default function ClubDashboard() {
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            {club.photo_url ? (
-              <div className="w-16 h-16 rounded-full bg-white/20 overflow-hidden border-2 border-white/50 shrink-0">
-                <img src={club.photo_url} alt={club.name} className="w-full h-full object-cover" />
-              </div>
-            ) : (
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/50 shrink-0">
-                <Users className="w-8 h-8 text-white/80" />
-              </div>
-            )}
             <div>
               <h1 className="text-2xl font-bold leading-tight flex items-center gap-2">
-                {club.name}
+                <Users className="w-6 h-6" /> {club.name}
               </h1>
               <p className="text-emerald-100 text-sm mt-1">{club.description}</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {currentUserMember?.role === 'owner' && (
-              <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white">
-                    <Edit2 className="w-4 h-4 mr-2" />
-                    Edit Club
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Edit Club Details</DialogTitle>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Club Name</label>
-                      <Input 
-                        value={editForm.name} 
-                        onChange={(e) => setEditForm({...editForm, name: e.target.value})} 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Description</label>
-                      <Textarea 
-                        value={editForm.description} 
-                        onChange={(e) => setEditForm({...editForm, description: e.target.value})} 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Photo URL</label>
-                      <div className="flex gap-2">
-                        <Input 
-                          placeholder="https://example.com/photo.jpg"
-                          value={editForm.photo_url} 
-                          onChange={(e) => setEditForm({...editForm, photo_url: e.target.value})} 
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Achievements</label>
-                      <div className="flex gap-2">
-                        <Input 
-                          placeholder="e.g., 2025 City Champions"
-                          value={newAchievement} 
-                          onChange={(e) => setNewAchievement(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddAchievement()}
-                        />
-                        <Button type="button" onClick={handleAddAchievement} variant="secondary">
-                          Add
-                        </Button>
-                      </div>
-                      <div className="mt-2 space-y-2">
-                        {editForm.achievements.map((achievement, index) => (
-                          <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded text-sm border border-gray-100">
-                            <span>{achievement}</span>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleRemoveAchievement(index)}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        {editForm.achievements.length === 0 && (
-                          <div className="text-sm text-gray-500 italic">No achievements added yet.</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveClub} disabled={isSaving}>
-                      {isSaving ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
             <NotificationsPopover />
           </div>
         </div>
@@ -314,29 +169,8 @@ export default function ClubDashboard() {
 
       <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left Column: Members & Achievements */}
+        {/* Left Column: Members */}
         <div className="lg:col-span-1 space-y-6">
-          {club.achievements && club.achievements.length > 0 && (
-            <Card className="border-none shadow-md bg-white">
-              <CardContent className="p-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-yellow-500" />
-                  Achievements
-                </h2>
-                <div className="space-y-3">
-                  {club.achievements.map((achievement: string, index: number) => (
-                    <div key={index} className="flex items-start gap-3 bg-yellow-50/50 p-3 rounded-lg border border-yellow-100">
-                      <div className="mt-0.5 w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center shrink-0">
-                        <Star className="w-3 h-3 text-yellow-600 fill-yellow-600" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-800">{achievement}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           <Card className="border-none shadow-md bg-white">
             <CardContent className="p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">

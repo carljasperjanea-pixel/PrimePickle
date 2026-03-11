@@ -74,16 +74,8 @@ export function ClubsList({ currentUserId }: { currentUserId: string }) {
             <Card key={club.id} className="overflow-hidden border-none shadow-sm">
               <CardContent className="p-5">
                 <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-3">
-                    {club.photo_url ? (
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 overflow-hidden shrink-0">
-                        <img src={club.photo_url} alt={club.name} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                        <Users className="w-4 h-4 text-emerald-600" />
-                      </div>
-                    )}
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-emerald-600" />
                     <h3 className="font-bold text-lg text-gray-900">{club.name}</h3>
                   </div>
                   {club.is_invited && (
@@ -155,16 +147,8 @@ export function ClubsList({ currentUserId }: { currentUserId: string }) {
             {otherClubs.map(club => (
               <Card key={club.id} className="overflow-hidden border-none shadow-sm bg-gray-50 cursor-pointer hover:opacity-100 transition-opacity" onClick={() => navigate(`/clubs/${club.id}`)}>
                 <CardContent className="p-5">
-                  <div className="flex items-center gap-3 mb-2">
-                    {club.photo_url ? (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden shrink-0">
-                        <img src={club.photo_url} alt={club.name} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
-                        <Users className="w-4 h-4 text-gray-400" />
-                      </div>
-                    )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-5 h-5 text-gray-400" />
                     <h3 className="font-bold text-lg text-gray-700">{club.name}</h3>
                   </div>
                   <p className="text-sm text-gray-500 mb-4 line-clamp-2">
