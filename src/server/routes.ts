@@ -2939,6 +2939,28 @@ import { generateTournamentMatches } from './tournament-generator.js';
       }
     });
 
+    // Update tournament status
+    router.put('/tournaments/:id/status', authenticateToken, async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+        
+        if (!['draft', 'in_progress', 'completed'].includes(status)) {
+          return res.status(400).json({ error: 'Invalid status' });
+        }
+
+        const { error } = await supabase
+          .from('tournaments')
+          .update({ status })
+          .eq('id', id);
+
+        if (error) throw error;
+        res.json({ success: true });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to update tournament status', details: error.message });
+      }
+    });
+
     // Start tournament
     router.post('/tournaments/:id/start', authenticateToken, async (req: any, res) => {
       try {

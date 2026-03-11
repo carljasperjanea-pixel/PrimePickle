@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { apiRequest } from '@/lib/api';
-import { Trophy, Plus, Users, Play, CheckCircle, Search, X } from 'lucide-react';
+import { Trophy, Plus, Users, Play, CheckCircle, Search, X, RotateCcw } from 'lucide-react';
 
 export function TournamentManager() {
   const [tournaments, setTournaments] = useState<any[]>([]);
@@ -117,6 +117,20 @@ export function TournamentManager() {
     }
   };
 
+  const handleToggleTournamentStatus = async (currentStatus: string) => {
+    const newStatus = currentStatus === 'in_progress' ? 'completed' : 'in_progress';
+    const actionText = newStatus === 'completed' ? 'complete' : 'reopen';
+    if (!confirm(`Are you sure you want to ${actionText} this tournament?`)) return;
+    
+    try {
+      await apiRequest(`/tournaments/${selectedTournament.tournament.id}/status`, 'PUT', { status: newStatus });
+      fetchTournamentDetails(selectedTournament.tournament.id);
+      fetchTournaments();
+    } catch (e) {
+      alert(`Failed to ${actionText} tournament`);
+    }
+  };
+
   if (selectedTournament) {
     const { tournament, participants, matches } = selectedTournament;
     
@@ -205,6 +219,16 @@ export function TournamentManager() {
             {tournament.status === 'draft' && (
               <Button onClick={handleStartTournament} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
                 <Play className="w-4 h-4" /> Start Tournament
+              </Button>
+            )}
+            {tournament.status === 'in_progress' && (
+              <Button onClick={() => handleToggleTournamentStatus(tournament.status)} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                <CheckCircle className="w-4 h-4" /> Mark as Completed
+              </Button>
+            )}
+            {tournament.status === 'completed' && (
+              <Button onClick={() => handleToggleTournamentStatus(tournament.status)} variant="outline" className="gap-2">
+                <RotateCcw className="w-4 h-4" /> Reopen Tournament
               </Button>
             )}
             <Button variant="destructive" onClick={() => handleDeleteTournament(tournament.id)} className="gap-2">
