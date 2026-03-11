@@ -194,6 +194,22 @@ async function checkDb() {
   } else {
     console.log('Success! "followers" table exists.');
   }
+  // Check for 'notifications' table
+  console.log('Checking schema for "notifications"...');
+  const { error: notificationsError } = await supabase
+    .from('notifications')
+    .select('id')
+    .limit(1);
+
+  if (notificationsError) {
+    console.error('Error checking "notifications":', notificationsError);
+    if (notificationsError.code === '42P01') { // Undefined table
+      console.error('--> CONCLUSION: The "notifications" table does not exist.');
+      console.error('--> ACTION: Run "src/server/migration_add_notifications.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "notifications" table exists.');
+  }
 }
 
 checkDb();

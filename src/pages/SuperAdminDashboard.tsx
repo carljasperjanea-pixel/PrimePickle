@@ -4,6 +4,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
 import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { NotificationsPopover } from '@/components/NotificationsPopover';
+import { SendNotificationDialog } from '@/components/SendNotificationDialog';
 
 export default function SuperAdminDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -73,6 +75,7 @@ export default function SuperAdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationsPopover />
             <Button 
               variant="secondary" 
               className="bg-white/20 text-white hover:bg-white/30 border-none shadow-sm"
@@ -116,9 +119,12 @@ export default function SuperAdminDashboard() {
 
         {/* Users List */}
         <Card className="border shadow-sm">
-          <div className="p-5 border-b bg-white">
-            <h3 className="font-bold text-lg text-gray-900">User Accounts</h3>
-            <p className="text-sm text-gray-500">Manage roles and access across the platform.</p>
+          <div className="p-5 border-b bg-white flex justify-between items-center">
+            <div>
+              <h3 className="font-bold text-lg text-gray-900">User Accounts</h3>
+              <p className="text-sm text-gray-500">Manage roles and access across the platform.</p>
+            </div>
+            <SendNotificationDialog userRole={user.role} />
           </div>
           <div className="p-0">
             <div className="overflow-x-auto">

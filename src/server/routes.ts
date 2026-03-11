@@ -838,6 +838,57 @@ router.post('/admin/users/:id/reset-password', authenticateToken, async (req: an
   }
 });
 
+// Send Notification (Admin/Super Admin)
+router.post('/admin/notify', authenticateToken, async (req: any, res) => {
+  try {
+    const { targetRole, message } = req.body; // targetRole: 'player', 'admin', 'all'
+    const senderRole = req.user.role;
+    const senderId = req.user.id;
+
+    if (senderRole !== 'admin' && senderRole !== 'super_admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    if (senderRole === 'admin' && targetRole !== 'player') {
+      return res.status(403).json({ error: 'Admins can only notify players' });
+    }
+
+    // Fetch users to notify
+    let query = supabase.from('profiles').select('id');
+    if (targetRole === 'player') {
+      query = query.eq('role', 'player');
+    } else if (targetRole === 'admin') {
+      query = query.eq('role', 'admin');
+    } else if (targetRole === 'all') {
+      query = query.in('role', ['player', 'admin']);
+    }
+
+    const { data: users, error: usersError } = await query;
+    if (usersError) throw usersError;
+
+    if (!users || users.length === 0) {
+      return res.json({ success: true, count: 0 });
+    }
+
+    const notifications = users.map(u => ({
+      user_id: u.id,
+      sender_id: senderId,
+      message
+    }));
+
+    const { error: insertError } = await supabase
+      .from('notifications')
+      .insert(notifications);
+
+    if (insertError) throw insertError;
+
+    res.json({ success: true, count: notifications.length });
+  } catch (error) {
+    console.error('Notify error:', error);
+    res.status(500).json({ error: 'Failed to send notifications' });
+  }
+});
+
 // Get Match History for Admin
 router.get('/admin/matches', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.sendStatus(403);
@@ -1690,6 +1741,53 @@ router.get('/user/pending-ratings', authenticateToken, async (req: any, res) => 
   } catch (error) {
     console.error('Pending ratings error:', error);
     res.status(500).json({ error: 'Failed to fetch pending ratings' });
+  }
+});
+
+// Get user notifications
+router.get('/user/notifications', authenticateToken, async (req: any, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*, sender:profiles!sender_id(display_name, avatar_url)')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    res.json({ notifications: data });
+  } catch (error) {
+    console.error('Fetch notifications error:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// Mark notification as read
+router.put('/user/notifications/:id/read', authenticateToken, async (req: any, res) => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .match({ id: req.params.id, user_id: req.user.id });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Mark notification read error:', error);
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
+});
+
+// Mark all notifications as read
+router.put('/user/notifications/read-all', authenticateToken, async (req: any, res) => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .match({ user_id: req.user.id, is_read: false });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Mark all notifications read error:', error);
+    res.status(500).json({ error: 'Failed to mark all as read' });
   }
 });
 

@@ -8,6 +8,8 @@ import { useNavigate } from 'react-router-dom';
 import { UserDirectory } from '@/components/UserDirectory';
 import { AdminMatchHistory } from '@/components/AdminMatchHistory';
 import PlayerSearch from '@/components/PlayerSearch';
+import { NotificationsPopover } from '@/components/NotificationsPopover';
+import { SendNotificationDialog } from '@/components/SendNotificationDialog';
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -93,6 +95,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationsPopover />
             {user?.role === 'super_admin' && (
               <Button 
                 variant="secondary" 
@@ -166,6 +169,7 @@ export default function AdminDashboard() {
           </div>
           
           <div className="flex items-center gap-4 w-full sm:w-auto">
+            <SendNotificationDialog userRole={user.role} />
             <div className="w-full sm:w-64">
               <PlayerSearch />
             </div>

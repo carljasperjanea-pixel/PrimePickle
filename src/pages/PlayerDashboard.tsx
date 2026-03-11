@@ -20,6 +20,7 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import Scorer from './Scorer';
 import RatingPrompt from '@/components/RatingPrompt';
 import PlayerSearch from '@/components/PlayerSearch';
+import { NotificationsPopover } from '@/components/NotificationsPopover';
 
 export default function PlayerDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -405,13 +406,16 @@ export default function PlayerDashboard() {
             <Trophy className="w-8 h-8 text-white" />
             <h1 className="text-2xl font-bold leading-tight">Player Dashboard</h1>
           </div>
-          <Button 
-            variant="secondary" 
-            className="bg-white text-gray-800 hover:bg-gray-100 border-none shadow-sm gap-2"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-4 h-4" /> Logout
-          </Button>
+          <div className="flex items-center gap-4">
+            <NotificationsPopover />
+            <Button 
+              variant="secondary" 
+              className="bg-white text-gray-800 hover:bg-gray-100 border-none shadow-sm gap-2"
+              onClick={handleLogout}
+            >
+              <LogOut className="w-4 h-4" /> Logout
+            </Button>
+          </div>
         </div>
       </header>
 
