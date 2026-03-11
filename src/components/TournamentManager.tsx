@@ -14,6 +14,7 @@ export function TournamentManager() {
   const [newTournament, setNewTournament] = useState({ name: '', format: 'single_elimination' });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [editingMatch, setEditingMatch] = useState<any>(null);
 
   useEffect(() => {
     fetchTournaments();
@@ -252,19 +253,23 @@ export function TournamentManager() {
             {tournament.format === 'round_robin' ? (() => {
               const standings = participants?.map((p: any) => {
                 let played = 0;
-                let won = 0;
-                let lost = 0;
+                let wins = 0;
+                let losses = 0;
                 matches?.forEach((m: any) => {
                   if (m.player1_id === p.profile_id || m.player2_id === p.profile_id) {
                     if (m.winner_id) {
                       played++;
-                      if (m.winner_id === p.profile_id) won++;
-                      else lost++;
+                      if (m.winner_id === p.profile_id) wins++;
+                      else losses++;
                     }
                   }
                 });
-                return { ...p, played, won, lost };
-              }).sort((a: any, b: any) => b.won - a.won || a.lost - b.lost) || [];
+                const points = wins;
+                return { ...p, played, wins, losses, points };
+              }).sort((a: any, b: any) => b.points - a.points || a.losses - b.losses) || [];
+
+              const maxMatchesPerRound = Math.max(...rounds.map(r => r.matches.length), 0);
+              const matchRows = Array.from({ length: maxMatchesPerRound });
 
               return (
                 <div className="space-y-8">
@@ -273,21 +278,21 @@ export function TournamentManager() {
                       <Trophy className="w-5 h-5 text-yellow-500" /> Standings
                     </h3>
                     <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-600 font-medium border-b">
+                      <table className="w-full text-sm text-left border-collapse">
+                        <thead className="bg-slate-500 text-white font-medium">
                           <tr>
-                            <th className="px-4 py-3 text-center w-16">Rank</th>
-                            <th className="px-4 py-3">Player</th>
-                            <th className="px-4 py-3 text-center">Played</th>
-                            <th className="px-4 py-3 text-center">Won</th>
-                            <th className="px-4 py-3 text-center">Lost</th>
+                            <th className="px-4 py-3 text-center w-16 border-r border-slate-600">Rank</th>
+                            <th className="px-4 py-3 border-r border-slate-600">Team / Player</th>
+                            <th className="px-4 py-3 text-center border-r border-slate-600">Wins</th>
+                            <th className="px-4 py-3 text-center border-r border-slate-600">Losses</th>
+                            <th className="px-4 py-3 text-center">Points</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y bg-white">
                           {standings.map((s: any, idx: number) => (
                             <tr key={s.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 font-bold text-center">{idx + 1}</td>
-                              <td className="px-4 py-3 flex items-center gap-2">
+                              <td className="px-4 py-3 font-bold text-center border-r">{idx + 1}</td>
+                              <td className="px-4 py-3 flex items-center gap-2 border-r">
                                 <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold overflow-hidden text-xs">
                                   {s.profiles.avatar_url ? (
                                     <img src={s.profiles.avatar_url} alt="avatar" className="w-full h-full object-cover" />
@@ -297,9 +302,9 @@ export function TournamentManager() {
                                 </div>
                                 <span className="font-medium">{s.profiles.display_name}</span>
                               </td>
-                              <td className="px-4 py-3 text-center">{s.played}</td>
-                              <td className="px-4 py-3 text-center text-emerald-600 font-bold">{s.won}</td>
-                              <td className="px-4 py-3 text-center text-red-600">{s.lost}</td>
+                              <td className="px-4 py-3 text-center border-r">{s.wins}</td>
+                              <td className="px-4 py-3 text-center border-r">{s.losses}</td>
+                              <td className="px-4 py-3 text-center font-bold text-slate-700">{s.points}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -308,16 +313,59 @@ export function TournamentManager() {
                   </div>
 
                   <div>
-                    <h3 className="text-xl font-bold text-gray-800 mb-4">Matches</h3>
-                    <div className="space-y-6">
-                      {rounds.map((round: any, idx: number) => (
-                        <div key={idx} className="space-y-4">
-                          <h4 className="text-md font-bold text-gray-600 border-b pb-2">{round.name}</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {round.matches.map((match: any) => renderMatch(match))}
-                          </div>
-                        </div>
-                      ))}
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">Schedule</h3>
+                    <div className="border rounded-lg overflow-x-auto">
+                      <table className="w-full text-sm text-center border-collapse min-w-max">
+                        <thead className="bg-slate-500 text-white font-medium">
+                          <tr>
+                            {rounds.map((round: any, idx: number) => (
+                              <th key={idx} className="px-4 py-3 border-r border-slate-600 last:border-r-0">
+                                {round.name}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y bg-white">
+                          {matchRows.map((_, rowIdx) => (
+                            <tr key={rowIdx}>
+                              {rounds.map((round: any, colIdx: number) => {
+                                const match = round.matches[rowIdx];
+                                if (!match) return <td key={colIdx} className="px-4 py-3 border-r last:border-r-0 bg-gray-50/50"></td>;
+                                
+                                const p1Name = match.player1?.display_name || 'TBD';
+                                const p2Name = match.is_bye ? 'BYE' : (match.player2?.display_name || 'TBD');
+                                const isCompleted = !!match.winner_id;
+                                const canEdit = !match.is_bye && match.player1_id && match.player2_id;
+                                
+                                return (
+                                  <td 
+                                    key={colIdx} 
+                                    className={`px-4 py-4 border-r last:border-r-0 transition-colors ${canEdit ? 'hover:bg-slate-50 cursor-pointer' : ''} ${isCompleted ? 'bg-slate-50/50' : ''}`}
+                                    onClick={() => {
+                                      if (canEdit) setEditingMatch(match);
+                                    }}
+                                  >
+                                    <div className="flex flex-col items-center justify-center gap-1">
+                                      <span className={`text-sm ${match.winner_id === match.player1_id ? 'font-bold text-emerald-600' : ''}`}>
+                                        {p1Name}
+                                      </span>
+                                      <span className="text-xs text-gray-400 font-medium">vs</span>
+                                      <span className={`text-sm ${match.winner_id === match.player2_id ? 'font-bold text-emerald-600' : ''}`}>
+                                        {p2Name}
+                                      </span>
+                                      {match.score && (
+                                        <span className="mt-1 text-xs font-mono bg-white border px-2 py-0.5 rounded text-slate-600">
+                                          {match.score}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
@@ -347,6 +395,46 @@ export function TournamentManager() {
             )}
           </div>
         )}
+
+        {/* Match Edit Dialog */}
+        <Dialog open={!!editingMatch} onOpenChange={(open) => !open && setEditingMatch(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Update Match Result</DialogTitle>
+            </DialogHeader>
+            {editingMatch && (
+              <div className="space-y-4 py-4">
+                <div className="flex justify-between items-center text-lg">
+                  <span className="font-bold truncate max-w-[40%]">{editingMatch.player1?.display_name}</span>
+                  <span className="text-gray-500 text-sm">vs</span>
+                  <span className="font-bold truncate max-w-[40%]">{editingMatch.player2?.display_name}</span>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Score (optional)</label>
+                  <Input id="match-score" placeholder="e.g., 11-9" defaultValue={editingMatch.score || ''} />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => {
+                    const score = (document.getElementById('match-score') as HTMLInputElement).value;
+                    handleUpdateMatch(editingMatch.id, editingMatch.player1_id, score);
+                    setEditingMatch(null);
+                  }}>{editingMatch.player1?.display_name} Won</Button>
+                  <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => {
+                    const score = (document.getElementById('match-score') as HTMLInputElement).value;
+                    handleUpdateMatch(editingMatch.id, editingMatch.player2_id, score);
+                    setEditingMatch(null);
+                  }}>{editingMatch.player2?.display_name} Won</Button>
+                </div>
+                {editingMatch.winner_id && (
+                  <Button variant="outline" className="w-full mt-2 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => {
+                    handleUpdateMatch(editingMatch.id, null, '');
+                    setEditingMatch(null);
+                  }}>Reset Match</Button>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
