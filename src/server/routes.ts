@@ -2307,11 +2307,12 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
         const { data: announcements, error } = await supabase
           .from('club_announcements')
           .select(`
-            id, content, created_at,
+            id, content, is_pinned, created_at,
             author:author_id ( id, display_name, avatar_url ),
             reactions:club_announcement_reactions ( user_id, type )
           `)
           .eq('club_id', req.params.id)
+          .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -2423,6 +2424,71 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       } catch (error: any) {
         console.error('React to announcement error:', error);
         res.status(500).json({ error: 'Failed to react', details: error.message });
+      }
+    });
+
+    // Delete an announcement
+    router.delete('/clubs/:id/announcements/:announcementId', authenticateToken, async (req: any, res) => {
+      try {
+        // Check if user is owner
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .eq('role', 'owner')
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only owners can delete announcements' });
+        }
+
+        const { error } = await supabase
+          .from('club_announcements')
+          .delete()
+          .eq('id', req.params.announcementId)
+          .eq('club_id', req.params.id);
+
+        if (error) throw error;
+        res.json({ message: 'Announcement deleted successfully' });
+      } catch (error: any) {
+        console.error('Delete announcement error:', error);
+        res.status(500).json({ error: 'Failed to delete announcement', details: error.message });
+      }
+    });
+
+    // Pin/Unpin an announcement
+    router.put('/clubs/:id/announcements/:announcementId/pin', authenticateToken, async (req: any, res) => {
+      const { is_pinned } = req.body;
+      if (typeof is_pinned !== 'boolean') {
+        return res.status(400).json({ error: 'is_pinned must be a boolean' });
+      }
+
+      try {
+        // Check if user is owner
+        const { data: member, error: memberError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .eq('role', 'owner')
+          .single();
+
+        if (memberError || !member) {
+          return res.status(403).json({ error: 'Only owners can pin/unpin announcements' });
+        }
+
+        const { error } = await supabase
+          .from('club_announcements')
+          .update({ is_pinned })
+          .eq('id', req.params.announcementId)
+          .eq('club_id', req.params.id);
+
+        if (error) throw error;
+        res.json({ message: `Announcement ${is_pinned ? 'pinned' : 'unpinned'} successfully` });
+      } catch (error: any) {
+        console.error('Pin announcement error:', error);
+        res.status(500).json({ error: 'Failed to pin/unpin announcement', details: error.message });
       }
     });
 

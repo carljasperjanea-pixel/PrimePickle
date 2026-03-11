@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, UserPlus, Shield, User, X, ArrowLeft, Trophy, Calendar, Megaphone, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Users, UserPlus, Shield, User, X, ArrowLeft, Trophy, Calendar, Megaphone, ThumbsUp, ThumbsDown, Pin, Trash2 } from 'lucide-react';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 
 export default function ClubDashboard() {
@@ -76,6 +76,25 @@ export default function ClubDashboard() {
       fetchAnnouncements();
     } catch (err: any) {
       alert(err.message || 'Failed to react');
+    }
+  };
+
+  const handlePinAnnouncement = async (announcementId: string, isPinned: boolean) => {
+    try {
+      await apiRequest(`/clubs/${id}/announcements/${announcementId}/pin`, 'PUT', { is_pinned: isPinned });
+      fetchAnnouncements();
+    } catch (err: any) {
+      alert(err.message || 'Failed to pin announcement');
+    }
+  };
+
+  const handleDeleteAnnouncement = async (announcementId: string) => {
+    if (!confirm('Are you sure you want to delete this announcement?')) return;
+    try {
+      await apiRequest(`/clubs/${id}/announcements/${announcementId}`, 'DELETE');
+      fetchAnnouncements();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete announcement');
     }
   };
 
@@ -294,21 +313,49 @@ export default function ClubDashboard() {
                         const userReaction = announcement.reactions?.find((r: any) => r.user_id === user.id)?.type;
 
                         return (
-                          <div key={announcement.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                            <div className="flex items-center gap-3 mb-2">
-                              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
-                                {announcement.author?.avatar_url ? (
-                                  <img src={announcement.author.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                                ) : (
-                                  announcement.author?.display_name?.charAt(0) || <User className="w-4 h-4" />
-                                )}
+                          <div key={announcement.id} className={`bg-gray-50 rounded-lg p-4 border ${announcement.is_pinned ? 'border-emerald-200 bg-emerald-50/30' : 'border-gray-100'}`}>
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
+                                  {announcement.author?.avatar_url ? (
+                                    <img src={announcement.author.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                                  ) : (
+                                    announcement.author?.display_name?.charAt(0) || <User className="w-4 h-4" />
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-medium text-gray-900 text-sm flex items-center gap-2">
+                                    {announcement.author?.display_name}
+                                    {announcement.is_pinned && <Pin className="w-3 h-3 text-emerald-600 fill-emerald-600" />}
+                                  </div>
+                                  <div className="text-xs text-gray-500">{new Date(announcement.created_at).toLocaleString()}</div>
+                                </div>
                               </div>
-                              <div>
-                                <div className="font-medium text-gray-900 text-sm">{announcement.author?.display_name}</div>
-                                <div className="text-xs text-gray-500">{new Date(announcement.created_at).toLocaleString()}</div>
-                              </div>
+                              
+                              {canInvite && (
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={`h-8 w-8 p-0 ${announcement.is_pinned ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                    onClick={() => handlePinAnnouncement(announcement.id, !announcement.is_pinned)}
+                                    title={announcement.is_pinned ? "Unpin announcement" : "Pin announcement"}
+                                  >
+                                    <Pin className={`w-4 h-4 ${announcement.is_pinned ? 'fill-emerald-600' : ''}`} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                    onClick={() => handleDeleteAnnouncement(announcement.id)}
+                                    title="Delete announcement"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              )}
                             </div>
-                            <p className="text-gray-800 whitespace-pre-wrap mb-4">{announcement.content}</p>
+                            <p className="text-gray-800 whitespace-pre-wrap mb-4 mt-2">{announcement.content}</p>
                             <div className="flex items-center gap-2 border-t pt-3">
                               <Button
                                 variant="ghost"
