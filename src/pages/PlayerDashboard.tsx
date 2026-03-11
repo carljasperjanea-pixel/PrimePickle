@@ -21,8 +21,10 @@ import Scorer from './Scorer';
 import RatingPrompt from '@/components/RatingPrompt';
 import PlayerSearch from '@/components/PlayerSearch';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
+import { ClubsList } from '@/components/ClubsList';
 
 export default function PlayerDashboard() {
+  const [activeTab, setActiveTab] = useState<'overview' | 'clubs'>('overview');
   const [user, setUser] = useState<any>(null);
   const [lobbies, setLobbies] = useState<any[]>([]);
   const [activeLobbyPlayers, setActiveLobbyPlayers] = useState<any[]>([]);
@@ -732,9 +734,29 @@ export default function PlayerDashboard() {
         {/* Right Content: Stats & Actions */}
         <div className="lg:col-span-2 space-y-6">
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* MMR Card */}
-            <Card className="border-none shadow-md bg-orange-50/50">
+          {/* Tabs */}
+          <div className="flex gap-2 bg-gray-100 p-1 rounded-lg w-fit">
+            <button 
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'overview' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+              onClick={() => setActiveTab('overview')}
+            >
+              Overview
+            </button>
+            <button 
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'clubs' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+              onClick={() => setActiveTab('clubs')}
+            >
+              Clubs
+            </button>
+          </div>
+
+          {activeTab === 'clubs' ? (
+            <ClubsList currentUserId={user.id} />
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* MMR Card */}
+                <Card className="border-none shadow-md bg-orange-50/50">
               <CardContent className="p-8 flex flex-col items-center justify-center text-center">
                 <div className="flex items-center gap-2 text-orange-600 font-medium mb-2">
                   <Trophy className="w-5 h-5" /> Current MMR
@@ -1140,6 +1162,8 @@ export default function PlayerDashboard() {
             </CardContent>
           </Card>
 
+            </>
+          )}
         </div>
       </main>
 

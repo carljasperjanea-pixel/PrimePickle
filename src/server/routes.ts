@@ -1997,4 +1997,282 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       }
     });
 
+    // --- Clubs Routes ---
+
+    // Get all clubs (with membership status)
+    router.get('/clubs', authenticateToken, async (req: any, res) => {
+      try {
+        const { data: clubs, error } = await supabase
+          .from('clubs')
+          .select(`
+            id, name, description, owner_id, created_at,
+            club_members ( user_id, role )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        
+        // Format to include user's membership status
+        const formattedClubs = clubs.map(club => {
+          const userMember = club.club_members.find((m: any) => m.user_id === req.user.id);
+          return {
+            ...club,
+            member_count: club.club_members.filter((m: any) => m.role !== 'invited').length,
+            user_role: userMember ? userMember.role : null,
+            is_member: userMember && userMember.role !== 'invited',
+            is_invited: userMember && userMember.role === 'invited'
+          };
+        });
+
+        res.json({ clubs: formattedClubs });
+      } catch (error: any) {
+        console.error('Fetch clubs error:', error);
+        res.status(500).json({ error: 'Failed to fetch clubs', details: error.message });
+      }
+    });
+
+    // Create a club
+    router.post('/clubs', authenticateToken, async (req: any, res) => {
+      const { name, description } = req.body;
+      if (!name) return res.status(400).json({ error: 'Club name is required' });
+
+      try {
+        // Create club
+        const { data: club, error: clubError } = await supabase
+          .from('clubs')
+          .insert([{ name, description, owner_id: req.user.id }])
+          .select()
+          .single();
+
+        if (clubError) throw clubError;
+
+        // Add creator as owner in club_members
+        const { error: memberError } = await supabase
+          .from('club_members')
+          .insert([{ club_id: club.id, user_id: req.user.id, role: 'owner' }]);
+
+        if (memberError) throw memberError;
+
+        res.json({ club, message: 'Club created successfully' });
+      } catch (error: any) {
+        console.error('Create club error:', error);
+        res.status(500).json({ error: 'Failed to create club', details: error.message });
+      }
+    });
+
+    // Get club details
+    router.get('/clubs/:id', authenticateToken, async (req: any, res) => {
+      try {
+        const { data: club, error: clubError } = await supabase
+          .from('clubs')
+          .select('*')
+          .eq('id', req.params.id)
+          .single();
+
+        if (clubError) throw clubError;
+
+        const { data: members, error: membersError } = await supabase
+          .from('club_members')
+          .select(`
+            user_id, role, joined_at,
+            profiles:user_id ( display_name, full_name, avatar_url )
+          `)
+          .eq('club_id', req.params.id);
+
+        if (membersError) throw membersError;
+
+        res.json({ club, members });
+      } catch (error: any) {
+        console.error('Fetch club details error:', error);
+        res.status(500).json({ error: 'Failed to fetch club details', details: error.message });
+      }
+    });
+
+    // Invite user to club
+    router.post('/clubs/:id/invite', authenticateToken, async (req: any, res) => {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+      try {
+        // Check if user is owner or admin
+        const { data: member, error: checkError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .single();
+
+        if (checkError || !['owner', 'admin'].includes(member?.role)) {
+          return res.status(403).json({ error: 'Only owners or admins can invite' });
+        }
+
+        // Check if already invited or member
+        const { data: existing, error: existError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (existing) {
+          return res.status(400).json({ error: 'User is already a member or invited' });
+        }
+
+        // Create invite
+        const { error: inviteError } = await supabase
+          .from('club_members')
+          .insert([{ club_id: req.params.id, user_id: userId, role: 'invited' }]);
+
+        if (inviteError) throw inviteError;
+
+        // Create notification for the invited user
+        const { data: club } = await supabase.from('clubs').select('name').eq('id', req.params.id).single();
+        await supabase.from('notifications').insert([{
+          user_id: userId,
+          sender_id: req.user.id,
+          message: `You have been invited to join the club: ${club?.name || 'Unknown Club'}`
+        }]);
+
+        res.json({ message: 'User invited successfully' });
+      } catch (error: any) {
+        console.error('Invite user error:', error);
+        res.status(500).json({ error: 'Failed to invite user', details: error.message });
+      }
+    });
+
+    // Invite user to club by email
+    router.post('/clubs/:id/invite-by-email', authenticateToken, async (req: any, res) => {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'Email is required' });
+
+      try {
+        // Check if user is owner or admin
+        const { data: member, error: checkError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.user.id)
+          .single();
+
+        if (checkError || !['owner', 'admin'].includes(member?.role)) {
+          return res.status(403).json({ error: 'Only owners or admins can invite' });
+        }
+
+        // Find user by email
+        const { data: targetUser, error: userError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', email)
+          .single();
+
+        if (userError || !targetUser) {
+          return res.status(404).json({ error: 'User not found with that email' });
+        }
+
+        const userId = targetUser.id;
+
+        // Check if already invited or member
+        const { data: existing, error: existError } = await supabase
+          .from('club_members')
+          .select('role')
+          .eq('club_id', req.params.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (existing) {
+          return res.status(400).json({ error: 'User is already a member or invited' });
+        }
+
+        // Create invite
+        const { error: inviteError } = await supabase
+          .from('club_members')
+          .insert([{ club_id: req.params.id, user_id: userId, role: 'invited' }]);
+
+        if (inviteError) throw inviteError;
+
+        // Create notification for the invited user
+        const { data: club } = await supabase.from('clubs').select('name').eq('id', req.params.id).single();
+        await supabase.from('notifications').insert([{
+          user_id: userId,
+          sender_id: req.user.id,
+          message: `You have been invited to join the club: ${club?.name || 'Unknown Club'}`
+        }]);
+
+        res.json({ message: 'User invited successfully' });
+      } catch (error: any) {
+        console.error('Invite user error:', error);
+        res.status(500).json({ error: 'Failed to invite user', details: error.message });
+      }
+    });
+
+    // Respond to invite (accept/reject)
+    router.put('/clubs/:id/members/:userId', authenticateToken, async (req: any, res) => {
+      const { action } = req.body; // 'accept' or 'reject'
+      
+      // Only the invited user can accept/reject their own invite
+      if (req.user.id !== req.params.userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      try {
+        if (action === 'accept') {
+          const { error } = await supabase
+            .from('club_members')
+            .update({ role: 'member', joined_at: new Date().toISOString() })
+            .eq('club_id', req.params.id)
+            .eq('user_id', req.params.userId)
+            .eq('role', 'invited');
+
+          if (error) throw error;
+          res.json({ message: 'Invitation accepted' });
+        } else if (action === 'reject') {
+          const { error } = await supabase
+            .from('club_members')
+            .delete()
+            .eq('club_id', req.params.id)
+            .eq('user_id', req.params.userId)
+            .eq('role', 'invited');
+
+          if (error) throw error;
+          res.json({ message: 'Invitation rejected' });
+        } else {
+          res.status(400).json({ error: 'Invalid action' });
+        }
+      } catch (error: any) {
+        console.error('Respond to invite error:', error);
+        res.status(500).json({ error: 'Failed to respond to invite', details: error.message });
+      }
+    });
+
+    // Leave or kick from club
+    router.delete('/clubs/:id/members/:userId', authenticateToken, async (req: any, res) => {
+      try {
+        // If user is kicking someone else, check if they are owner/admin
+        if (req.user.id !== req.params.userId) {
+          const { data: member } = await supabase
+            .from('club_members')
+            .select('role')
+            .eq('club_id', req.params.id)
+            .eq('user_id', req.user.id)
+            .single();
+
+          if (!member || !['owner', 'admin'].includes(member.role)) {
+            return res.status(403).json({ error: 'Only owners or admins can kick members' });
+          }
+        }
+
+        const { error } = await supabase
+          .from('club_members')
+          .delete()
+          .eq('club_id', req.params.id)
+          .eq('user_id', req.params.userId);
+
+        if (error) throw error;
+        res.json({ message: 'Member removed successfully' });
+      } catch (error: any) {
+        console.error('Remove member error:', error);
+        res.status(500).json({ error: 'Failed to remove member', details: error.message });
+      }
+    });
+
     export default router;
