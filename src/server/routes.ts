@@ -2811,4 +2811,202 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
       }
     });
 
+import { generateTournamentMatches } from './tournament-generator.js';
+
+    // --- TOURNAMENT ROUTES ---
+
+    // Create a tournament
+    router.post('/tournaments', authenticateToken, async (req: any, res) => {
+      try {
+        const { name, format } = req.body;
+        if (!name || !format) return res.status(400).json({ error: 'Name and format required' });
+
+        const { data: tournament, error } = await supabase
+          .from('tournaments')
+          .insert([{ name, format, created_by: req.user.id }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        res.json({ tournament });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to create tournament', details: error.message });
+      }
+    });
+
+    // Get all tournaments
+    router.get('/tournaments', authenticateToken, async (req: any, res) => {
+      try {
+        const { data: tournaments, error } = await supabase
+          .from('tournaments')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        res.json({ tournaments });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to fetch tournaments', details: error.message });
+      }
+    });
+
+    // Get tournament details
+    router.get('/tournaments/:id', authenticateToken, async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { data: tournament, error: tError } = await supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (tError) throw tError;
+
+        const { data: participants, error: pError } = await supabase
+          .from('tournament_participants')
+          .select('id, profile_id, profiles(display_name, avatar_url)')
+          .eq('tournament_id', id);
+
+        if (pError) throw pError;
+
+        const { data: matches, error: mError } = await supabase
+          .from('tournament_matches')
+          .select(`
+            *,
+            player1:profiles!player1_id(display_name, avatar_url),
+            player2:profiles!player2_id(display_name, avatar_url),
+            winner:profiles!winner_id(display_name, avatar_url)
+          `)
+          .eq('tournament_id', id)
+          .order('round_number', { ascending: true })
+          .order('match_order', { ascending: true });
+
+        if (mError) throw mError;
+
+        res.json({ tournament, participants, matches });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to fetch tournament', details: error.message });
+      }
+    });
+
+    // Add participant
+    router.post('/tournaments/:id/participants', authenticateToken, async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { profile_id } = req.body;
+        
+        const { data: participant, error } = await supabase
+          .from('tournament_participants')
+          .insert([{ tournament_id: id, profile_id }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        res.json({ participant });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to add participant', details: error.message });
+      }
+    });
+
+    // Remove participant
+    router.delete('/tournaments/:id/participants/:profileId', authenticateToken, async (req: any, res) => {
+      try {
+        const { id, profileId } = req.params;
+        const { error } = await supabase
+          .from('tournament_participants')
+          .delete()
+          .match({ tournament_id: id, profile_id: profileId });
+
+        if (error) throw error;
+        res.json({ success: true });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to remove participant', details: error.message });
+      }
+    });
+
+    // Start tournament
+    router.post('/tournaments/:id/start', authenticateToken, async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        
+        // Get tournament
+        const { data: tournament, error: tError } = await supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+        if (tError) throw tError;
+        if (tournament.status !== 'draft') return res.status(400).json({ error: 'Tournament already started' });
+
+        // Get participants
+        const { data: participants, error: pError } = await supabase
+          .from('tournament_participants')
+          .select('*')
+          .eq('tournament_id', id);
+
+        if (pError) throw pError;
+
+        // Generate matches
+        await generateTournamentMatches(id, tournament.format, participants || []);
+
+        // Update status
+        await supabase
+          .from('tournaments')
+          .update({ status: 'in_progress' })
+          .eq('id', id);
+
+        res.json({ success: true });
+      } catch (error: any) {
+        console.error('Start tournament error:', error);
+        res.status(500).json({ error: 'Failed to start tournament', details: error.message });
+      }
+    });
+
+    // Update match score/winner
+    router.put('/tournaments/matches/:matchId', authenticateToken, async (req: any, res) => {
+      try {
+        const { matchId } = req.params;
+        const { winner_id, score } = req.body;
+
+        const { data: match, error: mError } = await supabase
+          .from('tournament_matches')
+          .select('*')
+          .eq('id', matchId)
+          .single();
+
+        if (mError) throw mError;
+
+        // Update current match
+        const { error: updateError } = await supabase
+          .from('tournament_matches')
+          .update({ winner_id, score })
+          .eq('id', matchId);
+
+        if (updateError) throw updateError;
+
+        // Advance winner
+        if (match.next_match_id && winner_id) {
+          const slotField = match.next_match_player_slot === 1 ? 'player1_id' : 'player2_id';
+          await supabase
+            .from('tournament_matches')
+            .update({ [slotField]: winner_id })
+            .eq('id', match.next_match_id);
+        }
+
+        // Advance loser (for double elim)
+        if (match.loser_match_id && winner_id) {
+          const loser_id = winner_id === match.player1_id ? match.player2_id : match.player1_id;
+          const slotField = match.loser_match_slot === 1 ? 'player1_id' : 'player2_id';
+          await supabase
+            .from('tournament_matches')
+            .update({ [slotField]: loser_id })
+            .eq('id', match.loser_match_id);
+        }
+
+        res.json({ success: true });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to update match', details: error.message });
+      }
+    });
+
     export default router;

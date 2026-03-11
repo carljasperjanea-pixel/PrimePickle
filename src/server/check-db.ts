@@ -242,6 +242,22 @@ async function checkDb() {
   } else {
     console.log('Success! "messages" table exists.');
   }
+  // Check for 'tournaments' table
+  console.log('Checking schema for "tournaments"...');
+  const { error: tournamentsError } = await supabase
+    .from('tournaments')
+    .select('id')
+    .limit(1);
+
+  if (tournamentsError) {
+    console.error('Error checking "tournaments":', tournamentsError);
+    if (tournamentsError.code === '42P01' || tournamentsError.code === 'PGRST205') { // Undefined table
+      console.error('--> CONCLUSION: The "tournaments" table does not exist.');
+      console.error('--> ACTION: Run "src/server/migration_add_tournaments.sql" in Supabase SQL Editor.');
+    }
+  } else {
+    console.log('Success! "tournaments" table exists.');
+  }
 }
 
 checkDb();

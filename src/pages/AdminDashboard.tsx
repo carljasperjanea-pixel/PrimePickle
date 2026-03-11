@@ -7,6 +7,7 @@ import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode,
 import { useNavigate } from 'react-router-dom';
 import { UserDirectory } from '@/components/UserDirectory';
 import { AdminMatchHistory } from '@/components/AdminMatchHistory';
+import { TournamentManager } from '@/components/TournamentManager';
 import GlobalSearch from '@/components/GlobalSearch';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { SendNotificationDialog } from '@/components/SendNotificationDialog';
@@ -15,7 +16,7 @@ export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [lobbies, setLobbies] = useState<any[]>([]);
   const [qrLobby, setQrLobby] = useState<any>(null); // Lobby to show QR for
-  const [activeTab, setActiveTab] = useState<'lobbies' | 'directory' | 'history'>('lobbies');
+  const [activeTab, setActiveTab] = useState<'lobbies' | 'directory' | 'history' | 'tournaments'>('lobbies');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -173,6 +174,12 @@ export default function AdminDashboard() {
             >
               Match History
             </button>
+            <button 
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'tournaments' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+              onClick={() => setActiveTab('tournaments')}
+            >
+              Tournaments
+            </button>
           </div>
           
           <div className="flex items-center gap-4 w-full sm:w-auto">
@@ -211,6 +218,8 @@ export default function AdminDashboard() {
         {activeTab === 'directory' && <UserDirectory />}
         
         {activeTab === 'history' && <AdminMatchHistory />}
+        
+        {activeTab === 'tournaments' && <TournamentManager />}
       </main>
 
       {/* QR Code Modal */}
