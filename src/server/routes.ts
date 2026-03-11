@@ -271,6 +271,32 @@ router.put('/user/profile', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Search Players
+router.get('/players/search', authenticateToken, async (req: any, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || typeof q !== 'string' || q.length < 2) {
+      return res.json({ players: [] });
+    }
+
+    const { data: players, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url, mmr')
+      .ilike('display_name', `%${q}%`)
+      .limit(10);
+
+    if (error) {
+      console.error('Player search error:', error);
+      return res.status(500).json({ error: 'Failed to search players' });
+    }
+
+    res.json({ players: players || [] });
+  } catch (error: any) {
+    console.error('Player search error:', error);
+    res.status(500).json({ error: 'Failed to search players' });
+  }
+});
+
 // Get Public Profile (Respects Visibility Settings)
 router.get('/public/profile/:id', authenticateToken, async (req: any, res) => {
   try {
@@ -303,6 +329,79 @@ router.get('/public/profile/:id', authenticateToken, async (req: any, res) => {
   } catch (error) {
     console.error('Public profile fetch error:', error);
     res.sendStatus(500);
+  }
+});
+
+// Get Public Gears
+router.get('/public/gears/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const { data: gears, error } = await supabase
+      .from('player_gears')
+      .select('*')
+      .eq('player_id', req.params.id)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ gears });
+  } catch (error) {
+    console.error('Fetch public gears error:', error);
+    res.status(500).json({ error: 'Failed to fetch gears' });
+  }
+});
+
+// Get Public Matches
+router.get('/public/matches/:id', authenticateToken, async (req: any, res) => {
+  try {
+    // 1. Get all lobby_ids the user has participated in
+    const { data: userLobbies, error: ulError } = await supabase
+      .from('lobby_players')
+      .select('lobby_id, team')
+      .eq('profile_id', req.params.id);
+
+    if (ulError) throw ulError;
+
+    if (!userLobbies || userLobbies.length === 0) {
+      return res.json({ matches: [] });
+    }
+
+    const lobbyIds = userLobbies.map((l: any) => l.lobby_id);
+
+    // 2. Fetch matches for these lobbies
+    const { data: matches, error: mError } = await supabase
+      .from('matches')
+      .select(`
+        id,
+        lobby_id,
+        winner_team,
+        score,
+        mmr_delta,
+        completed_at
+      `)
+      .in('lobby_id', lobbyIds)
+      .order('completed_at', { ascending: false })
+      .limit(10);
+
+    if (mError) throw mError;
+
+    // 3. Format matches
+    const formattedMatches = matches.map((match: any) => {
+      const userLobby = userLobbies.find((l: any) => l.lobby_id === match.lobby_id);
+      const isWin = match.winner_team === userLobby?.team;
+      
+      return {
+        id: match.id,
+        date: match.completed_at,
+        result: isWin ? 'Win' : 'Loss',
+        score: match.score,
+        mmr_delta: isWin ? match.mmr_delta : -match.mmr_delta
+      };
+    });
+
+    res.json({ matches: formattedMatches });
+  } catch (error) {
+    console.error('Fetch public matches error:', error);
+    res.status(500).json({ error: 'Failed to fetch matches' });
   }
 });
 
