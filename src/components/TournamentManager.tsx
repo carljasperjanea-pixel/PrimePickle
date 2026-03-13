@@ -18,6 +18,11 @@ export function TournamentManager() {
   const [rearrangingMatch, setRearrangingMatch] = useState<any>(null);
   const [rearrangePlayer1, setRearrangePlayer1] = useState<string>('none');
   const [rearrangePlayer2, setRearrangePlayer2] = useState<string>('none');
+  
+  // 2v2 Team State
+  const [teamPlayer1, setTeamPlayer1] = useState<any>(null);
+  const [teamPlayer2, setTeamPlayer2] = useState<any>(null);
+  const [teamName, setTeamName] = useState('');
 
   useEffect(() => {
     fetchTournaments();
@@ -67,6 +72,41 @@ export function TournamentManager() {
     }
   };
 
+  const [searchQuery1, setSearchQuery1] = useState('');
+  const [searchQuery2, setSearchQuery2] = useState('');
+  const [searchResults1, setSearchResults1] = useState<any[]>([]);
+  const [searchResults2, setSearchResults2] = useState<any[]>([]);
+
+  const handleSearchUsers1 = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery1(query);
+    if (query.length < 2) {
+      setSearchResults1([]);
+      return;
+    }
+    try {
+      const data = await apiRequest(`/users/search?q=${encodeURIComponent(query)}`);
+      setSearchResults1(data.users);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSearchUsers2 = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery2(query);
+    if (query.length < 2) {
+      setSearchResults2([]);
+      return;
+    }
+    try {
+      const data = await apiRequest(`/users/search?q=${encodeURIComponent(query)}`);
+      setSearchResults2(data.users);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleAddParticipant = async (profileId: string) => {
     try {
       await apiRequest(`/tournaments/${selectedTournament.tournament.id}/participants`, 'POST', { profile_id: profileId });
@@ -75,6 +115,34 @@ export function TournamentManager() {
       fetchTournamentDetails(selectedTournament.tournament.id);
     } catch (e) {
       alert('Failed to add participant');
+    }
+  };
+
+  const handleAddTeam = async () => {
+    if (!teamPlayer1 || !teamPlayer2) {
+      alert('Please select two players for the team');
+      return;
+    }
+    if (teamPlayer1.id === teamPlayer2.id) {
+      alert('Please select two different players');
+      return;
+    }
+    try {
+      await apiRequest(`/tournaments/${selectedTournament.tournament.id}/teams`, 'POST', {
+        player1_id: teamPlayer1.id,
+        player2_id: teamPlayer2.id,
+        team_name: teamName || `${teamPlayer1.display_name} & ${teamPlayer2.display_name}`
+      });
+      setTeamPlayer1(null);
+      setTeamPlayer2(null);
+      setTeamName('');
+      setSearchQuery1('');
+      setSearchQuery2('');
+      setSearchResults1([]);
+      setSearchResults2([]);
+      fetchTournamentDetails(selectedTournament.tournament.id);
+    } catch (e) {
+      alert('Failed to add team');
     }
   };
 
@@ -243,7 +311,7 @@ export function TournamentManager() {
             <Button variant="outline" onClick={() => setSelectedTournament(null)}>Back</Button>
             <h2 className="text-2xl font-bold">{tournament.name}</h2>
             <span className="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium capitalize">
-              {tournament.format.replace('_', ' ')}
+              {tournament.format.replace(/_/g, ' ')}
             </span>
             <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${
               tournament.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
@@ -283,25 +351,93 @@ export function TournamentManager() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input 
-                      placeholder="Search users to add..." 
-                      className="pl-9"
-                      value={searchQuery}
-                      onChange={handleSearchUsers}
-                    />
-                    {searchResults.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                        {searchResults.map(u => (
-                          <div key={u.id} className="flex items-center justify-between p-2 hover:bg-gray-50 border-b last:border-0">
-                            <span className="text-sm font-medium">{u.display_name}</span>
-                            <Button size="sm" variant="ghost" onClick={() => handleAddParticipant(u.id)}>Add</Button>
+                  {tournament.format.endsWith('_2v2') ? (
+                    <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
+                      <h4 className="font-medium text-sm">Add Team</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-medium text-gray-500">Player 1</label>
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                            <Input 
+                              placeholder="Search..." 
+                              className="pl-7 h-8 text-sm"
+                              value={teamPlayer1 ? teamPlayer1.display_name : searchQuery1}
+                              onChange={e => {
+                                setTeamPlayer1(null);
+                                handleSearchUsers1(e);
+                              }}
+                            />
+                            {!teamPlayer1 && searchResults1.length > 0 && (
+                              <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                                {searchResults1.map(u => (
+                                  <div key={u.id} className="flex items-center justify-between p-2 hover:bg-gray-50 border-b last:border-0 cursor-pointer" onClick={() => { setTeamPlayer1(u); setSearchResults1([]); setSearchQuery1(''); }}>
+                                    <span className="text-xs font-medium">{u.display_name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        ))}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-medium text-gray-500">Player 2</label>
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                            <Input 
+                              placeholder="Search..." 
+                              className="pl-7 h-8 text-sm"
+                              value={teamPlayer2 ? teamPlayer2.display_name : searchQuery2}
+                              onChange={e => {
+                                setTeamPlayer2(null);
+                                handleSearchUsers2(e);
+                              }}
+                            />
+                            {!teamPlayer2 && searchResults2.length > 0 && (
+                              <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                                {searchResults2.map(u => (
+                                  <div key={u.id} className="flex items-center justify-between p-2 hover:bg-gray-50 border-b last:border-0 cursor-pointer" onClick={() => { setTeamPlayer2(u); setSearchResults2([]); setSearchQuery2(''); }}>
+                                    <span className="text-xs font-medium">{u.display_name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-gray-500">Team Name (Optional)</label>
+                        <Input 
+                          placeholder="e.g., The Smashers" 
+                          className="h-8 text-sm"
+                          value={teamName}
+                          onChange={e => setTeamName(e.target.value)}
+                        />
+                      </div>
+                      <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleAddTeam}>
+                        Add Team
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input 
+                        placeholder="Search users to add..." 
+                        className="pl-9"
+                        value={searchQuery}
+                        onChange={handleSearchUsers}
+                      />
+                      {searchResults.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                          {searchResults.map(u => (
+                            <div key={u.id} className="flex items-center justify-between p-2 hover:bg-gray-50 border-b last:border-0">
+                              <span className="text-sm font-medium">{u.display_name}</span>
+                              <Button size="sm" variant="ghost" onClick={() => handleAddParticipant(u.id)}>Add</Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {participants?.map((p: any) => (
                       <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -330,7 +466,7 @@ export function TournamentManager() {
           </div>
         ) : (
           <div className="space-y-8 bg-white p-6 rounded-xl border shadow-sm">
-            {tournament.format === 'round_robin' ? (() => {
+            {tournament.format.startsWith('round_robin') ? (() => {
               const standings = participants?.map((p: any) => {
                 let played = 0;
                 let wins = 0;
@@ -450,7 +586,7 @@ export function TournamentManager() {
                   </div>
                 </div>
               );
-            })() : tournament.format === 'double_elimination' ? (
+            })() : tournament.format.startsWith('double_elimination') ? (
               <div className="space-y-12">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -597,9 +733,12 @@ export function TournamentManager() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single_elimination">Single Elimination</SelectItem>
-                    <SelectItem value="double_elimination">Double Elimination</SelectItem>
-                    <SelectItem value="round_robin">Round Robin</SelectItem>
+                    <SelectItem value="single_elimination">Single Elimination (1v1)</SelectItem>
+                    <SelectItem value="double_elimination">Double Elimination (1v1)</SelectItem>
+                    <SelectItem value="round_robin">Round Robin (1v1)</SelectItem>
+                    <SelectItem value="single_elimination_2v2">Single Elimination (2v2)</SelectItem>
+                    <SelectItem value="double_elimination_2v2">Double Elimination (2v2)</SelectItem>
+                    <SelectItem value="round_robin_2v2">Round Robin (2v2)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -641,7 +780,7 @@ export function TournamentManager() {
                 </div>
               </div>
               <h3 className="font-bold text-lg mb-1 truncate">{t.name}</h3>
-              <p className="text-sm text-gray-500 capitalize">{t.format.replace('_', ' ')}</p>
+              <p className="text-sm text-gray-500 capitalize">{t.format.replace(/_/g, ' ')}</p>
               <div className="mt-4 text-xs text-gray-400">
                 Created {new Date(t.created_at).toLocaleDateString()}
               </div>

@@ -8,11 +8,11 @@ export async function generateTournamentMatches(tournamentId: string, format: st
   // Shuffle participants for random seeding
   const players = [...participants].sort(() => Math.random() - 0.5);
 
-  if (format === 'single_elimination') {
+  if (format === 'single_elimination' || format === 'single_elimination_2v2') {
     await generateSingleElimination(tournamentId, players);
-  } else if (format === 'round_robin') {
+  } else if (format === 'round_robin' || format === 'round_robin_2v2') {
     await generateRoundRobin(tournamentId, players);
-  } else if (format === 'double_elimination') {
+  } else if (format === 'double_elimination' || format === 'double_elimination_2v2') {
     await generateDoubleElimination(tournamentId, players);
   } else {
     throw new Error('Unsupported tournament format');

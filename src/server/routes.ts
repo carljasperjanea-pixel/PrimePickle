@@ -3006,16 +3006,71 @@ import { generateTournamentMatches } from './tournament-generator.js';
       }
     });
 
+    // Add team participant
+    router.post('/tournaments/:id/teams', authenticateToken, async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { player1_id, player2_id, team_name } = req.body;
+
+        if (!player1_id || !player2_id) {
+          return res.status(400).json({ error: 'Two players are required for a team' });
+        }
+
+        // Create a team profile
+        const teamId = uuidv4();
+        const email = `team_${teamId}@tournament.local`;
+        
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: teamId,
+            email,
+            password_hash: 'none',
+            display_name: team_name || 'Team',
+            role: 'team',
+            address: JSON.stringify([player1_id, player2_id])
+          }]);
+
+        if (profileError) throw profileError;
+
+        // Add team profile as participant
+        const { data: participant, error } = await supabase
+          .from('tournament_participants')
+          .insert([{ tournament_id: id, profile_id: teamId }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        res.json({ participant });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to add team', details: error.message });
+      }
+    });
+
     // Remove participant
     router.delete('/tournaments/:id/participants/:profileId', authenticateToken, async (req: any, res) => {
       try {
         const { id, profileId } = req.params;
+
+        // Check if it's a team profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', profileId)
+          .single();
+
         const { error } = await supabase
           .from('tournament_participants')
           .delete()
           .match({ tournament_id: id, profile_id: profileId });
 
         if (error) throw error;
+
+        // Clean up team profile
+        if (profile?.role === 'team') {
+          await supabase.from('profiles').delete().eq('id', profileId);
+        }
+
         res.json({ success: true });
       } catch (error: any) {
         res.status(500).json({ error: 'Failed to remove participant', details: error.message });
@@ -3026,12 +3081,28 @@ import { generateTournamentMatches } from './tournament-generator.js';
     router.delete('/tournaments/:id', authenticateToken, async (req: any, res) => {
       try {
         const { id } = req.params;
+        
+        // Find team profiles to delete
+        const { data: participants } = await supabase
+          .from('tournament_participants')
+          .select('profile_id, profiles!inner(role)')
+          .eq('tournament_id', id)
+          .eq('profiles.role', 'team');
+          
+        const teamIds = participants?.map(p => p.profile_id) || [];
+
         const { error } = await supabase
           .from('tournaments')
           .delete()
           .eq('id', id);
 
         if (error) throw error;
+        
+        // Clean up team profiles
+        if (teamIds.length > 0) {
+          await supabase.from('profiles').delete().in('id', teamIds);
+        }
+        
         res.json({ success: true });
       } catch (error: any) {
         res.status(500).json({ error: 'Failed to delete tournament', details: error.message });
