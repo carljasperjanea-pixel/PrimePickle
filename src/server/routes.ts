@@ -2510,7 +2510,7 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
     });
 
     // Add an achievement
-    router.post('/clubs/:id/achievements', authenticateToken, async (req: any, res) => {
+    router.post('/clubs/:id/achievements', authenticateToken, upload.single('image'), async (req: any, res) => {
       const { title, description, date } = req.body;
       if (!title) return res.status(400).json({ error: 'Title is required' });
 
@@ -2528,12 +2528,66 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
           return res.status(403).json({ error: 'Only owners and admins can add achievements' });
         }
 
+        // Check limit of 10 achievements
+        const { count, error: countError } = await supabase
+          .from('club_achievements')
+          .select('*', { count: 'exact', head: true })
+          .eq('club_id', req.params.id);
+
+        if (countError) throw countError;
+        if (count && count >= 10) {
+          return res.status(400).json({ error: 'Maximum limit of 10 achievements reached' });
+        }
+
+        let imageUrl = null;
+        if (req.file) {
+          const file = req.file;
+          const fileExt = file.originalname.split('.').pop();
+          const fileName = `${req.params.id}-${Date.now()}.${fileExt}`;
+          const filePath = `${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('club-achievements')
+            .upload(filePath, file.buffer, {
+              contentType: file.mimetype,
+              upsert: true
+            });
+
+          if (uploadError) {
+            // Try to create bucket if it doesn't exist
+            try {
+              await supabase.storage.createBucket('club-achievements', { public: true });
+              const { error: retryError } = await supabase.storage
+                .from('club-achievements')
+                .upload(filePath, file.buffer, {
+                  contentType: file.mimetype,
+                  upsert: true
+                });
+              if (retryError) throw retryError;
+            } catch (createErr) {
+              throw uploadError;
+            }
+          }
+
+          const { data: publicUrlData } = supabase.storage
+            .from('club-achievements')
+            .getPublicUrl(filePath);
+            
+          imageUrl = publicUrlData.publicUrl;
+        }
+
+        // Store image URL in description as JSON string
+        const descData = {
+          text: description || '',
+          image_url: imageUrl
+        };
+
         const { data: achievement, error } = await supabase
           .from('club_achievements')
           .insert([{
             club_id: req.params.id,
             title,
-            description,
+            description: JSON.stringify(descData),
             date: date || new Date().toISOString()
           }])
           .select()
@@ -2598,9 +2652,9 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
     });
 
     // Add a photo
-    router.post('/clubs/:id/photos', authenticateToken, async (req: any, res) => {
-      const { url, caption } = req.body;
-      if (!url) return res.status(400).json({ error: 'URL is required' });
+    router.post('/clubs/:id/photos', authenticateToken, upload.single('image'), async (req: any, res) => {
+      const { caption } = req.body;
+      if (!req.file) return res.status(400).json({ error: 'Image file is required' });
 
       try {
         // Check if user is owner or admin
@@ -2616,11 +2670,56 @@ router.put('/user/notifications/read-all', authenticateToken, async (req: any, r
           return res.status(403).json({ error: 'Only owners and admins can add photos' });
         }
 
+        // Check limit of 10 photos
+        const { count, error: countError } = await supabase
+          .from('club_photos')
+          .select('*', { count: 'exact', head: true })
+          .eq('club_id', req.params.id);
+
+        if (countError) throw countError;
+        if (count && count >= 10) {
+          return res.status(400).json({ error: 'Maximum limit of 10 photos reached' });
+        }
+
+        const file = req.file;
+        const fileExt = file.originalname.split('.').pop();
+        const fileName = `${req.params.id}-${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('club-photos')
+          .upload(filePath, file.buffer, {
+            contentType: file.mimetype,
+            upsert: true
+          });
+
+        if (uploadError) {
+          // Try to create bucket if it doesn't exist
+          try {
+            await supabase.storage.createBucket('club-photos', { public: true });
+            const { error: retryError } = await supabase.storage
+              .from('club-photos')
+              .upload(filePath, file.buffer, {
+                contentType: file.mimetype,
+                upsert: true
+              });
+            if (retryError) throw retryError;
+          } catch (createErr) {
+            throw uploadError;
+          }
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('club-photos')
+          .getPublicUrl(filePath);
+          
+        const imageUrl = publicUrlData.publicUrl;
+
         const { data: photo, error } = await supabase
           .from('club_photos')
           .insert([{
             club_id: req.params.id,
-            url,
+            url: imageUrl,
             caption,
             uploaded_by: req.user.id
           }])

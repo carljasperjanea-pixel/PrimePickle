@@ -24,9 +24,10 @@ export default function ClubDashboard() {
   const [achievements, setAchievements] = useState<any[]>([]);
   const [newAchievementTitle, setNewAchievementTitle] = useState('');
   const [newAchievementDesc, setNewAchievementDesc] = useState('');
+  const [newAchievementImage, setNewAchievementImage] = useState<File | null>(null);
   const [achievementLoading, setAchievementLoading] = useState(false);
   const [photos, setPhotos] = useState<any[]>([]);
-  const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
   const [newPhotoCaption, setNewPhotoCaption] = useState('');
   const [photoLoading, setPhotoLoading] = useState(false);
 
@@ -130,12 +131,28 @@ export default function ClubDashboard() {
     if (!newAchievementTitle.trim()) return;
     setAchievementLoading(true);
     try {
-      await apiRequest(`/clubs/${id}/achievements`, 'POST', { 
-        title: newAchievementTitle,
-        description: newAchievementDesc
+      const formData = new FormData();
+      formData.append('title', newAchievementTitle);
+      formData.append('description', newAchievementDesc);
+      if (newAchievementImage) {
+        formData.append('image', newAchievementImage);
+      }
+
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/clubs/${id}/achievements`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
       });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add achievement');
+
       setNewAchievementTitle('');
       setNewAchievementDesc('');
+      setNewAchievementImage(null);
       fetchAchievements();
     } catch (err: any) {
       alert(err.message || 'Failed to add achievement');
@@ -155,14 +172,26 @@ export default function ClubDashboard() {
   };
 
   const handleAddPhoto = async () => {
-    if (!newPhotoUrl.trim()) return;
+    if (!newPhotoFile) return;
     setPhotoLoading(true);
     try {
-      await apiRequest(`/clubs/${id}/photos`, 'POST', { 
-        url: newPhotoUrl,
-        caption: newPhotoCaption
+      const formData = new FormData();
+      formData.append('image', newPhotoFile);
+      formData.append('caption', newPhotoCaption);
+
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/clubs/${id}/photos`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
       });
-      setNewPhotoUrl('');
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add photo');
+
+      setNewPhotoFile(null);
       setNewPhotoCaption('');
       fetchPhotos();
     } catch (err: any) {
@@ -489,6 +518,14 @@ export default function ClubDashboard() {
                         className="bg-white"
                         rows={2}
                       />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setNewAchievementImage(e.target.files?.[0] || null)}
+                          className="bg-white flex-1"
+                        />
+                      </div>
                       <div className="flex justify-end">
                         <Button 
                           onClick={handleAddAchievement}
@@ -508,30 +545,49 @@ export default function ClubDashboard() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {achievements.map((achievement) => (
-                          <div key={achievement.id} className="bg-amber-50/50 rounded-lg p-4 border border-amber-100 relative group">
-                            {canInvite && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-600 hover:bg-red-50"
-                                onClick={() => handleDeleteAchievement(achievement.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                            <div className="flex items-center gap-2 mb-2">
-                              <Trophy className="w-5 h-5 text-amber-500" />
-                              <h3 className="font-bold text-gray-900">{achievement.title}</h3>
+                        {achievements.map((achievement) => {
+                          let descText = achievement.description;
+                          let imageUrl = null;
+                          try {
+                            const parsed = JSON.parse(achievement.description);
+                            if (parsed && typeof parsed === 'object') {
+                              descText = parsed.text;
+                              imageUrl = parsed.image_url;
+                            }
+                          } catch (e) {
+                            // Not JSON, use as is
+                          }
+
+                          return (
+                            <div key={achievement.id} className="bg-amber-50/50 rounded-lg p-4 border border-amber-100 relative group overflow-hidden">
+                              {canInvite && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-600 hover:bg-red-50 z-10 bg-white/80 backdrop-blur-sm rounded-full"
+                                  onClick={() => handleDeleteAchievement(achievement.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {imageUrl && (
+                                <div className="mb-3 -mx-4 -mt-4 h-32 overflow-hidden bg-gray-100">
+                                  <img src={imageUrl} alt={achievement.title} className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 mb-2">
+                                <Trophy className="w-5 h-5 text-amber-500" />
+                                <h3 className="font-bold text-gray-900">{achievement.title}</h3>
+                              </div>
+                              {descText && (
+                                <p className="text-sm text-gray-700 mb-2">{descText}</p>
+                              )}
+                              <div className="text-xs text-gray-500">
+                                {new Date(achievement.date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                              </div>
                             </div>
-                            {achievement.description && (
-                              <p className="text-sm text-gray-700 mb-2">{achievement.description}</p>
-                            )}
-                            <div className="text-xs text-gray-500">
-                              {new Date(achievement.date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -547,9 +603,9 @@ export default function ClubDashboard() {
                   {canInvite && (
                     <div className="mb-6 space-y-3 bg-gray-50 p-4 rounded-lg border">
                       <Input
-                        placeholder="Photo URL (e.g., https://example.com/photo.jpg)"
-                        value={newPhotoUrl}
-                        onChange={(e) => setNewPhotoUrl(e.target.value)}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setNewPhotoFile(e.target.files?.[0] || null)}
                         className="bg-white"
                       />
                       <Input
@@ -561,7 +617,7 @@ export default function ClubDashboard() {
                       <div className="flex justify-end">
                         <Button 
                           onClick={handleAddPhoto}
-                          disabled={photoLoading || !newPhotoUrl.trim()}
+                          disabled={photoLoading || !newPhotoFile}
                           className="bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           {photoLoading ? 'Uploading...' : 'Add Photo'}
