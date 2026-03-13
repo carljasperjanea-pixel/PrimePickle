@@ -295,35 +295,31 @@ function LobbyCard({ lobby, index, onViewQR, onCompleteMatch }: { lobby: any, in
         </Button>
       </div>
 
-      <div className="p-5 space-y-6 bg-white">
-        {/* Team A */}
-        <div className="space-y-2">
+      <div className="p-5 bg-white">
+        <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Team A
           </div>
-          {teamA.length > 0 ? (
-            <div className="space-y-2">
-              {teamA.map((p: any) => <PlayerRow key={p.id} player={p} color="blue" />)}
-              {teamA.length < 2 && <WaitingRow />}
-            </div>
-          ) : (
-            <WaitingRow />
-          )}
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">VS</div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+            Team B <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+          </div>
         </div>
 
-        {/* Team B */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span> Team B
+        <div className="space-y-3">
+          {/* Slot 1 */}
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+            {teamA[0] ? <PlayerRow player={teamA[0]} color="blue" /> : <WaitingRow />}
+            <div className="text-gray-300 font-medium text-xs">vs</div>
+            {teamB[0] ? <PlayerRow player={teamB[0]} color="orange" reverse /> : <WaitingRow />}
           </div>
-          {teamB.length > 0 ? (
-            <div className="space-y-2">
-              {teamB.map((p: any) => <PlayerRow key={p.id} player={p} color="orange" />)}
-              {teamB.length < 2 && <WaitingRow />}
-            </div>
-          ) : (
-            <WaitingRow />
-          )}
+          
+          {/* Slot 2 */}
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+            {teamA[1] ? <PlayerRow player={teamA[1]} color="blue" /> : <WaitingRow />}
+            <div className="text-gray-300 font-medium text-xs">vs</div>
+            {teamB[1] ? <PlayerRow player={teamB[1]} color="orange" reverse /> : <WaitingRow />}
+          </div>
         </div>
       </div>
 
@@ -349,31 +345,31 @@ function LobbyCard({ lobby, index, onViewQR, onCompleteMatch }: { lobby: any, in
   );
 }
 
-function PlayerRow({ player, color }: { player: any, color: 'blue' | 'orange' }) {
+function PlayerRow({ player, color, reverse = false }: { player: any, color: 'blue' | 'orange', reverse?: boolean }) {
   const bgClass = color === 'blue' ? 'bg-blue-50 border-blue-100' : 'bg-orange-50 border-orange-100';
   const textClass = color === 'blue' ? 'text-blue-700' : 'text-orange-700';
   
   return (
-    <div className={`flex items-center justify-between p-3 rounded-lg border ${bgClass}`}>
-      <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${color === 'blue' ? 'bg-blue-200 text-blue-700' : 'bg-orange-200 text-orange-700'}`}>
+    <div className={`flex items-center justify-between p-3 rounded-lg border ${bgClass} ${reverse ? 'flex-row-reverse' : ''}`}>
+      <div className={`flex items-center gap-3 ${reverse ? 'flex-row-reverse text-right' : ''}`}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${color === 'blue' ? 'bg-blue-200 text-blue-700' : 'bg-orange-200 text-orange-700'}`}>
           {player.display_name.slice(0, 2).toUpperCase()}
         </div>
-        <div>
-          <div className="font-medium text-sm text-gray-900">{player.display_name}</div>
+        <div className="min-w-0">
+          <div className="font-medium text-sm text-gray-900 truncate">{player.display_name}</div>
           <div className="text-xs text-gray-500">MMR: {player.mmr}</div>
         </div>
       </div>
-      <UserIcon className={`w-4 h-4 ${textClass}`} />
+      <UserIcon className={`w-4 h-4 shrink-0 ${textClass} ${reverse ? 'mr-2' : ''}`} />
     </div>
   );
 }
 
 function WaitingRow() {
   return (
-    <div className="flex items-center justify-center p-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 text-gray-400 text-sm gap-2">
-      <Clock className="w-4 h-4" />
-      Waiting for players...
+    <div className="flex items-center justify-center p-3 h-[62px] rounded-lg border border-dashed border-gray-300 bg-gray-50 text-gray-400 text-sm gap-2">
+      <Clock className="w-4 h-4 shrink-0" />
+      <span className="truncate">Waiting...</span>
     </div>
   );
 }
