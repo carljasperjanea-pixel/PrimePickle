@@ -15,6 +15,9 @@ export function TournamentManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [editingMatch, setEditingMatch] = useState<any>(null);
+  const [rearrangingMatch, setRearrangingMatch] = useState<any>(null);
+  const [rearrangePlayer1, setRearrangePlayer1] = useState<string>('none');
+  const [rearrangePlayer2, setRearrangePlayer2] = useState<string>('none');
 
   useEffect(() => {
     fetchTournaments();
@@ -95,12 +98,28 @@ export function TournamentManager() {
     }
   };
 
-  const handleUpdateMatch = async (matchId: string, winnerId: string, score: string) => {
+  const handleUpdateMatch = async (matchId: string, winnerId: string | null, score: string) => {
     try {
       await apiRequest(`/tournaments/matches/${matchId}`, 'PUT', { winner_id: winnerId, score });
       fetchTournamentDetails(selectedTournament.tournament.id);
     } catch (e) {
       alert('Failed to update match');
+    }
+  };
+
+  const handleRearrangeMatch = async () => {
+    if (!rearrangingMatch) return;
+    try {
+      const p1 = rearrangePlayer1 === 'none' ? null : rearrangePlayer1;
+      const p2 = rearrangePlayer2 === 'none' ? null : rearrangePlayer2;
+      await apiRequest(`/tournaments/matches/${rearrangingMatch.id}/participants`, 'PUT', { 
+        player1_id: p1, 
+        player2_id: p2 
+      });
+      fetchTournamentDetails(selectedTournament.tournament.id);
+      setRearrangingMatch(null);
+    } catch (e) {
+      alert('Failed to rearrange match');
     }
   };
 
@@ -145,9 +164,23 @@ export function TournamentManager() {
     const rounds = Array.from(roundsMap.values()).sort((a, b) => a.matches[0].round_number - b.matches[0].round_number);
 
     const renderMatch = (match: any) => (
-      <Card key={match.id} className={`w-full min-w-[250px] border-l-4 ${match.winner_id ? 'border-l-emerald-500' : 'border-l-gray-300'} shadow-sm`}>
+      <Card key={match.id} className={`w-full min-w-[250px] border-l-4 ${match.winner_id ? 'border-l-emerald-500' : 'border-l-gray-300'} shadow-sm relative group`}>
         <CardContent className="p-3">
-          <div className="text-xs text-gray-500 mb-2 font-medium">Match {match.match_order} {match.is_bye && '(Bye)'}</div>
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-gray-500 font-medium">Match {match.match_order} {match.is_bye && '(Bye)'}</div>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => {
+                setRearrangingMatch(match);
+                setRearrangePlayer1(match.player1_id || 'none');
+                setRearrangePlayer2(match.player2_id || 'none');
+              }}
+            >
+              Rearrange
+            </Button>
+          </div>
           <div className="space-y-1">
             {[
               { id: match.player1_id, profile: match.player1 },
@@ -177,8 +210,13 @@ export function TournamentManager() {
             </div>
           )}
           {match.score && (
-            <div className="mt-2 text-center text-xs font-medium text-gray-600">
-              Score: {match.score}
+            <div className="mt-2 text-center text-xs font-medium text-gray-600 cursor-pointer hover:text-gray-900" onClick={() => setEditingMatch(match)}>
+              Score: {match.score} (Edit)
+            </div>
+          )}
+          {!match.score && match.winner_id && (
+            <div className="mt-2 text-center text-xs font-medium text-gray-600 cursor-pointer hover:text-gray-900" onClick={() => setEditingMatch(match)}>
+              Edit Result
             </div>
           )}
         </CardContent>
@@ -473,6 +511,54 @@ export function TournamentManager() {
                     setEditingMatch(null);
                   }}>Reset Match</Button>
                 )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Match Rearrange Dialog */}
+        <Dialog open={!!rearrangingMatch} onOpenChange={(open) => !open && setRearrangingMatch(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Rearrange Match Participants</DialogTitle>
+            </DialogHeader>
+            {rearrangingMatch && (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Player 1</label>
+                  <Select value={rearrangePlayer1} onValueChange={setRearrangePlayer1}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Player 1" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (TBD / BYE)</SelectItem>
+                      {participants?.map((p: any) => (
+                        <SelectItem key={p.profile_id} value={p.profile_id}>
+                          {p.profiles.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Player 2</label>
+                  <Select value={rearrangePlayer2} onValueChange={setRearrangePlayer2}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Player 2" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (TBD / BYE)</SelectItem>
+                      {participants?.map((p: any) => (
+                        <SelectItem key={p.profile_id} value={p.profile_id}>
+                          {p.profiles.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 mt-4" onClick={handleRearrangeMatch}>
+                  Save Changes
+                </Button>
               </div>
             )}
           </DialogContent>

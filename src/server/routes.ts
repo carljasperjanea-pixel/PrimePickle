@@ -3146,4 +3146,46 @@ import { generateTournamentMatches } from './tournament-generator.js';
       }
     });
 
+    // Update match participants (manual rearrange)
+    router.put('/tournaments/matches/:matchId/participants', authenticateToken, async (req: any, res) => {
+      try {
+        const { matchId } = req.params;
+        const { player1_id, player2_id } = req.body;
+
+        const { data: match, error: mError } = await supabase
+          .from('tournament_matches')
+          .select('*')
+          .eq('id', matchId)
+          .single();
+
+        if (mError) throw mError;
+
+        const is_bye = !!((player1_id && !player2_id) || (!player1_id && player2_id));
+        let winner_id = null;
+        if (is_bye) {
+          winner_id = player1_id || player2_id;
+        }
+
+        const { error: updateError } = await supabase
+          .from('tournament_matches')
+          .update({ player1_id, player2_id, is_bye, winner_id })
+          .eq('id', matchId);
+
+        if (updateError) throw updateError;
+
+        // Advance winner if it's a bye, or clear if it's not
+        if (match.next_match_id) {
+          const slotField = match.next_match_player_slot === 1 ? 'player1_id' : 'player2_id';
+          await supabase
+            .from('tournament_matches')
+            .update({ [slotField]: winner_id })
+            .eq('id', match.next_match_id);
+        }
+
+        res.json({ success: true });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to update match participants', details: error.message });
+      }
+    });
+
     export default router;
