@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode, Clock, X, Search, MessageSquare } from 'lucide-react';
+import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode, Clock, X, Search, MessageSquare, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UserDirectory } from '@/components/UserDirectory';
 import { AdminMatchHistory } from '@/components/AdminMatchHistory';
@@ -11,6 +11,9 @@ import { TournamentManager } from '@/components/TournamentManager';
 import GlobalSearch from '@/components/GlobalSearch';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { SendNotificationDialog } from '@/components/SendNotificationDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -96,6 +99,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <AdminProfileEditor user={user} onUpdate={setUser} />
             <Button 
               variant="ghost" 
               className="text-white hover:bg-white/20 p-2 h-auto rounded-full"
@@ -389,5 +393,53 @@ function UserIcon({ className }: { className?: string }) {
       <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>
+  );
+}
+
+function AdminProfileEditor({ user, onUpdate }: { user: any, onUpdate: (u: any) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [displayName, setDisplayName] = useState(user?.display_name || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const res = await apiRequest('/user/profile', 'PUT', { display_name: displayName });
+      onUpdate(res.user);
+      setIsOpen(false);
+    } catch (e: any) {
+      alert('Failed to update profile: ' + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" className="text-white hover:bg-white/20 gap-2 px-3">
+          <span className="font-medium">{user?.display_name || 'Admin'}</span>
+          <Pencil className="w-3 h-3 opacity-70" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Profile</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Display Name</Label>
+            <Input 
+              value={displayName} 
+              onChange={(e) => setDisplayName(e.target.value)} 
+              placeholder="Enter your display name"
+            />
+          </div>
+          <Button onClick={handleSave} disabled={isSaving} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
