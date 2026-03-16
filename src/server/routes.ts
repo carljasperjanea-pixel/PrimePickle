@@ -33,7 +33,7 @@ router.get('/super-admin/users', authenticateToken, async (req: any, res) => {
   try {
     const { data: users, error } = await supabase
       .from('profiles')
-      .select('id, email, display_name, full_name, role, created_at')
+      .select('id, email, display_name, full_name, role, created_at, mfa_enabled, is_suspended')
       .order('created_at', { ascending: false });
 
     if (error) throw error;

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil } from 'lucide-react';
+import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil, KeyRound, Ban, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { SendNotificationDialog } from '@/components/SendNotificationDialog';
@@ -52,6 +52,22 @@ export default function SuperAdminDashboard() {
       fetchUsers();
     } catch (e: any) {
       alert(`Failed to delete user: ${e.message}`);
+    }
+  };
+
+  const handleAction = async (userId: string, action: 'reset-password' | 'toggle-mfa' | 'toggle-suspend') => {
+    try {
+      if (action === 'reset-password') {
+        if (!confirm('Are you sure you want to force a password reset for this user?')) return;
+      } else if (action === 'toggle-suspend') {
+        if (!confirm('Are you sure you want to toggle the suspension status for this user?')) return;
+      }
+
+      await apiRequest(`/admin/users/${userId}/${action}`, 'POST');
+      fetchUsers();
+    } catch (e) {
+      console.error(`Failed to ${action}:`, e);
+      alert(`Failed to perform action: ${(e as any).message}`);
     }
   };
 
@@ -152,8 +168,9 @@ export default function SuperAdminDashboard() {
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id} className="bg-white border-b hover:bg-gray-50">
-                      <td className="px-6 py-4 font-medium text-gray-900">
+                      <td className="px-6 py-4 font-medium text-gray-900 flex items-center gap-2">
                         {u.display_name || u.full_name || 'Unnamed'}
+                        {u.is_suspended && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">BANNED</span>}
                       </td>
                       <td className="px-6 py-4">{u.email}</td>
                       <td className="px-6 py-4">
@@ -170,7 +187,7 @@ export default function SuperAdminDashboard() {
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
                         {u.id !== user.id && (
-                          <>
+                          <div className="flex items-center justify-end gap-2">
                             <select 
                               className="text-xs border rounded p-1 bg-gray-50 text-gray-700"
                               value={u.role}
@@ -181,14 +198,41 @@ export default function SuperAdminDashboard() {
                               <option value="super_admin">Super Admin</option>
                             </select>
                             <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 w-8 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                              title="Force Password Reset"
+                              onClick={() => handleAction(u.id, 'reset-password')}
+                            >
+                              <KeyRound className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className={`h-8 w-8 p-0 ${u.mfa_enabled ? 'text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100' : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                              title={u.mfa_enabled ? "Disable MFA" : "Enable MFA"}
+                              onClick={() => handleAction(u.id, 'toggle-mfa')}
+                            >
+                              {u.mfa_enabled ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className={`h-8 w-8 p-0 ${u.is_suspended ? 'text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100' : 'text-gray-500 hover:text-rose-600 hover:bg-rose-50'}`}
+                              title={u.is_suspended ? "Unban User" : "Suspend/Ban User"}
+                              onClick={() => handleAction(u.id, 'toggle-suspend')}
+                            >
+                              <Ban className="w-4 h-4" />
+                            </Button>
+                            <Button 
                               variant="ghost" 
                               size="sm" 
-                              className="text-red-600 hover:text-red-800 hover:bg-red-50 px-2"
+                              className="text-red-600 hover:text-red-800 hover:bg-red-50 px-2 h-8"
                               onClick={() => handleDeleteUser(u.id)}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
-                          </>
+                          </div>
                         )}
                       </td>
                     </tr>
