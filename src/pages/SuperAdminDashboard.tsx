@@ -16,6 +16,7 @@ export default function SuperAdminDashboard() {
   const [users, setUsers] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'settings'>('overview');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -157,9 +158,42 @@ export default function SuperAdminDashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 space-y-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <main className="max-w-7xl mx-auto p-6">
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Sidebar Navigation */}
+          <aside className="w-full md:w-64 shrink-0">
+            <nav className="flex flex-col space-y-1">
+              <button 
+                onClick={() => setActiveTab('overview')}
+                className={`text-left px-4 py-2 rounded-md font-medium transition-colors ${activeTab === 'overview' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                Overview
+              </button>
+              <button 
+                onClick={() => setActiveTab('users')}
+                className={`text-left px-4 py-2 rounded-md font-medium transition-colors ${activeTab === 'users' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                User Accounts
+              </button>
+              <button 
+                onClick={() => setActiveTab('logs')}
+                className={`text-left px-4 py-2 rounded-md font-medium transition-colors ${activeTab === 'logs' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                Activity Logs
+              </button>
+              <button 
+                onClick={() => setActiveTab('settings')}
+                className={`text-left px-4 py-2 rounded-md font-medium transition-colors ${activeTab === 'settings' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                System Settings
+              </button>
+            </nav>
+          </aside>
+
+          {/* Main Content Area */}
+          <div className="flex-1 space-y-8">
+            {activeTab === 'overview' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatsCard 
             icon={<Users className="w-6 h-6 text-blue-600" />} 
             bg="bg-blue-100" 
@@ -178,10 +212,11 @@ export default function SuperAdminDashboard() {
             value={playersCount} 
             label="Players" 
           />
-        </div>
+              </div>
+            )}
 
-        {/* System Controls */}
-        <Card className="border shadow-sm border-amber-200">
+            {activeTab === 'settings' && (
+              <Card className="border shadow-sm border-amber-200">
           <div className="p-5 border-b bg-amber-50 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-amber-100 rounded-lg">
@@ -212,11 +247,12 @@ export default function SuperAdminDashboard() {
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+            )}
 
-        {/* Activity Logs */}
-        <Card className="border shadow-sm">
+            {activeTab === 'logs' && (
+              <Card className="border shadow-sm">
           <div className="p-5 border-b bg-white flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-slate-100 rounded-lg">
@@ -277,12 +313,13 @@ export default function SuperAdminDashboard() {
                   ))
                 )}
               </tbody>
-            </table>
-          </div>
-        </Card>
+                </table>
+              </div>
+            </Card>
+            )}
 
-        {/* Users List */}
-        <Card className="border shadow-sm">
+            {activeTab === 'users' && (
+              <Card className="border shadow-sm">
           <div className="p-5 border-b bg-white flex justify-between items-center">
             <div>
               <h3 className="font-bold text-lg text-gray-900">User Accounts</h3>
@@ -382,10 +419,13 @@ export default function SuperAdminDashboard() {
                     </tr>
                   )}
                 </tbody>
-              </table>
-            </div>
+                  </table>
+                </div>
+              </div>
+            </Card>
+            )}
           </div>
-        </Card>
+        </div>
       </main>
     </div>
   );
