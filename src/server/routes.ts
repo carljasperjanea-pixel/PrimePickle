@@ -31,12 +31,26 @@ router.get('/super-admin/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'super_admin') return res.sendStatus(403);
 
   try {
-    const { data: users, error } = await supabase
+    let { data: users, error } = await supabase
       .from('profiles')
       .select('id, email, display_name, full_name, role, created_at, mfa_enabled, is_suspended')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    // Fallback if mfa_enabled or is_suspended columns don't exist yet
+    if (error && (error.code === 'PGRST106' || error.code === '42703')) {
+      const fallbackResult = await supabase
+        .from('profiles')
+        .select('id, email, display_name, full_name, role, created_at')
+        .order('created_at', { ascending: false });
+        
+      if (fallbackResult.error) throw fallbackResult.error;
+      if (fallbackResult.data) {
+        users = fallbackResult.data.map(u => ({ ...u, mfa_enabled: false, is_suspended: false }));
+      }
+    } else if (error) {
+      throw error;
+    }
+
     res.json({ users });
   } catch (error) {
     console.error('Fetch users error:', error);
