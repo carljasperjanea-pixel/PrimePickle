@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, User, Users } from 'lucide-react';
+import { Search, User, Users, Shield } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -15,7 +15,7 @@ import {
 
 export default function GlobalSearch() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ players: any[], clubs: any[] }>({ players: [], clubs: [] });
+  const [results, setResults] = useState<{ players: any[], admins: any[], clubs: any[] }>({ players: [], admins: [], clubs: [] });
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +26,7 @@ export default function GlobalSearch() {
       if (query.length >= 2) {
         handleSearch();
       } else {
-        setResults({ players: [], clubs: [] });
+        setResults({ players: [], admins: [], clubs: [] });
       }
     }, 300);
 
@@ -41,6 +41,7 @@ export default function GlobalSearch() {
       const data = await apiRequest(`/search?q=${encodeURIComponent(query)}`);
       setResults({
         players: data.players || [],
+        admins: data.admins || [],
         clubs: data.clubs || []
       });
     } catch (error: any) {
@@ -67,7 +68,7 @@ export default function GlobalSearch() {
         setIsOpen(open);
         if (!open) {
             setQuery('');
-            setResults({ players: [], clubs: [] });
+            setResults({ players: [], admins: [], clubs: [] });
         }
     }}>
       <DialogTrigger asChild>
@@ -97,6 +98,34 @@ export default function GlobalSearch() {
           <div className="space-y-4 max-h-[400px] overflow-y-auto">
             {loading && <div className="text-center text-sm text-gray-500 py-4">Searching...</div>}
             
+            {/* Admins Section */}
+            {!loading && results.admins?.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">Admins</h3>
+                <div className="space-y-1">
+                  {results.admins.map((admin) => (
+                    <div 
+                      key={admin.id} 
+                      className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded-lg transition-colors border border-transparent hover:border-gray-200 cursor-pointer"
+                      onClick={() => handleSelectPlayer(admin.id)}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 overflow-hidden flex items-center justify-center shrink-0">
+                        {admin.avatar_url ? (
+                          <img src={admin.avatar_url} alt={admin.display_name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Shield className="w-5 h-5 text-emerald-600" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{admin.display_name}</div>
+                        <div className="text-xs text-emerald-600 font-medium capitalize">{admin.role.replace('_', ' ')}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Players Section */}
             {!loading && results.players.length > 0 && (
               <div>
@@ -159,8 +188,8 @@ export default function GlobalSearch() {
               <div className="text-center text-red-500 text-sm py-2">{error}</div>
             )}
             
-            {results.players.length === 0 && results.clubs.length === 0 && query.length >= 2 && !loading && !error && (
-              <div className="text-center text-gray-500 text-sm py-8">No players or clubs found</div>
+            {results.players.length === 0 && results.admins.length === 0 && results.clubs.length === 0 && query.length >= 2 && !loading && !error && (
+              <div className="text-center text-gray-500 text-sm py-8">No players, admins, or clubs found</div>
             )}
             
             {query.length < 2 && (

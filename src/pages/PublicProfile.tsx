@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest } from '@/lib/api';
-import { Trophy, Activity, MapPin, Phone, Mail, ArrowLeft, ImageIcon } from 'lucide-react';
+import { Trophy, Activity, MapPin, Phone, Mail, ArrowLeft, ImageIcon, Shield, Clock, Key } from 'lucide-react';
 
 export default function PublicProfile() {
   const { id } = useParams();
@@ -11,6 +11,7 @@ export default function PublicProfile() {
   const [user, setUser] = useState<any>(null);
   const [gears, setGears] = useState<any[]>([]);
   const [matches, setMatches] = useState<any[]>([]);
+  const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
@@ -41,12 +42,22 @@ export default function PublicProfile() {
         setGears([]);
       }
 
-      try {
-        const matchesData = await apiRequest(`/public/matches/${id}`);
-        setMatches(matchesData.matches || []);
-      } catch (e) {
-        console.warn("Failed to load matches", e);
-        setMatches([]);
+      if (userData.user.role === 'admin' || userData.user.role === 'super_admin') {
+        try {
+          const logsData = await apiRequest(`/public/admin-logs/${id}`);
+          setAdminLogs(logsData.logs || []);
+        } catch (e) {
+          console.warn("Failed to load admin logs", e);
+          setAdminLogs([]);
+        }
+      } else {
+        try {
+          const matchesData = await apiRequest(`/public/matches/${id}`);
+          setMatches(matchesData.matches || []);
+        } catch (e) {
+          console.warn("Failed to load matches", e);
+          setMatches([]);
+        }
       }
 
       // Fetch follow stats
@@ -123,6 +134,12 @@ export default function PublicProfile() {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">{user.display_name}</h2>
                 {user.full_name && <p className="text-gray-500">{user.full_name}</p>}
+                
+                {(user.role === 'admin' || user.role === 'super_admin') && (
+                  <div className="mt-2 px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full capitalize flex items-center gap-1">
+                    <Shield className="w-3 h-3" /> {user.role.replace('_', ' ')}
+                  </div>
+                )}
                 
                 <div className="flex gap-4 mt-4 text-sm">
                   <div className="text-center">
@@ -209,59 +226,113 @@ export default function PublicProfile() {
           </Card>
         </div>
 
-        {/* Right Content: Stats */}
+        {/* Right Content: Stats or Admin Info */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-none shadow-md bg-orange-50/50">
-              <CardContent className="p-8 flex flex-col items-center justify-center text-center">
-                <div className="flex items-center gap-2 text-orange-600 font-medium mb-2">
-                  <Trophy className="w-5 h-5" /> MMR
-                </div>
-                <div className="text-6xl font-bold text-amber-600 mb-1">{user.mmr || 1000}</div>
-                <div className="text-sm text-gray-500">Matchmaking Rating</div>
-              </CardContent>
-            </Card>
+          {(user.role === 'admin' || user.role === 'super_admin') ? (
+            <>
+              {/* Permissions */}
+              <Card className="border-none shadow-md bg-white">
+                <CardContent className="p-6">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Key className="w-5 h-5 text-emerald-600" /> Permissions & Access
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <div className="font-medium text-gray-900 mb-1">Role Level</div>
+                      <div className="text-sm text-gray-500 capitalize">{user.role.replace('_', ' ')}</div>
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <div className="font-medium text-gray-900 mb-1">System Access</div>
+                      <div className="text-sm text-gray-500">
+                        {user.role === 'super_admin' ? 'Full Platform Control' : 'Tournament & Player Management'}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-            <Card className="border-none shadow-md bg-blue-50/50">
-              <CardContent className="p-8 flex flex-col items-center justify-center text-center">
-                <div className="flex items-center gap-2 text-blue-600 font-medium mb-2">
-                  <Activity className="w-5 h-5" /> Games Played
-                </div>
-                <div className="text-6xl font-bold text-blue-600 mb-1">{gamesPlayed}</div>
-                <div className="text-sm text-gray-500">Total Matches</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recent Matches */}
-          <Card className="border-none shadow-md bg-white">
-            <CardContent className="p-6">
-                <h3 className="font-bold text-gray-900 mb-4">Recent Matches</h3>
-                <div className="space-y-2">
-                    {matches.length > 0 ? (
-                        matches.map((match) => (
-                            <div key={match.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-2 h-12 rounded-full ${match.result === 'Win' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                    <div>
-                                        <div className="font-bold text-gray-900">{match.result}</div>
-                                        <div className="text-xs text-gray-500">{new Date(match.date).toLocaleDateString()}</div>
+              {/* Activity Logs */}
+              <Card className="border-none shadow-md bg-white">
+                <CardContent className="p-6">
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-blue-600" /> Recent Activity
+                    </h3>
+                    <div className="space-y-3">
+                        {adminLogs.length > 0 ? (
+                            adminLogs.map((log) => (
+                                <div key={log.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                    <div className="mt-0.5">
+                                        <Activity className="w-4 h-4 text-gray-400" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="font-medium text-sm text-gray-900">{log.action_performed}</div>
+                                        {log.target_id && <div className="text-xs text-gray-500 mt-0.5">Target: {log.target_id}</div>}
+                                        <div className="text-xs text-gray-400 mt-1">{new Date(log.created_at).toLocaleString()}</div>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <div className="font-mono font-medium">{match.score || 'N/A'}</div>
-                                    <div className={`text-xs font-bold ${match.mmr_delta > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {match.mmr_delta > 0 ? '+' : ''}{match.mmr_delta} MMR
+                            ))
+                        ) : (
+                            <div className="text-center py-8 text-gray-400 text-sm">No recent activity found.</div>
+                        )}
+                    </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="border-none shadow-md bg-orange-50/50">
+                  <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+                    <div className="flex items-center gap-2 text-orange-600 font-medium mb-2">
+                      <Trophy className="w-5 h-5" /> MMR
+                    </div>
+                    <div className="text-6xl font-bold text-amber-600 mb-1">{user.mmr || 1000}</div>
+                    <div className="text-sm text-gray-500">Matchmaking Rating</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-md bg-blue-50/50">
+                  <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+                    <div className="flex items-center gap-2 text-blue-600 font-medium mb-2">
+                      <Activity className="w-5 h-5" /> Games Played
+                    </div>
+                    <div className="text-6xl font-bold text-blue-600 mb-1">{gamesPlayed}</div>
+                    <div className="text-sm text-gray-500">Total Matches</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recent Matches */}
+              <Card className="border-none shadow-md bg-white">
+                <CardContent className="p-6">
+                    <h3 className="font-bold text-gray-900 mb-4">Recent Matches</h3>
+                    <div className="space-y-2">
+                        {matches.length > 0 ? (
+                            matches.map((match) => (
+                                <div key={match.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-2 h-12 rounded-full ${match.result === 'Win' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                        <div>
+                                            <div className="font-bold text-gray-900">{match.result}</div>
+                                            <div className="text-xs text-gray-500">{new Date(match.date).toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="font-mono font-medium">{match.score || 'N/A'}</div>
+                                        <div className={`text-xs font-bold ${match.mmr_delta > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {match.mmr_delta > 0 ? '+' : ''}{match.mmr_delta} MMR
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))
-                    ) : (
-                        <div className="text-center py-8 text-gray-400">No recent matches found.</div>
-                    )}
-                </div>
-            </CardContent>
-          </Card>
+                            ))
+                        ) : (
+                            <div className="text-center py-8 text-gray-400">No recent matches found.</div>
+                        )}
+                    </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </main>
     </div>

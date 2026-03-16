@@ -437,13 +437,26 @@ router.get('/search', authenticateToken, async (req: any, res) => {
 
     const { data: players, error: playersError } = await supabase
       .from('profiles')
-      .select('id, display_name, avatar_url, mmr')
+      .select('id, display_name, avatar_url, mmr, role')
       .ilike('display_name', `%${q}%`)
+      .eq('role', 'player')
       .limit(5);
 
     if (playersError) {
       console.error('Player search error:', playersError);
       return res.status(500).json({ error: 'Failed to search players' });
+    }
+
+    const { data: admins, error: adminsError } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url, role')
+      .ilike('display_name', `%${q}%`)
+      .in('role', ['admin', 'super_admin'])
+      .limit(5);
+
+    if (adminsError) {
+      console.error('Admin search error:', adminsError);
+      return res.status(500).json({ error: 'Failed to search admins' });
     }
 
     const { data: clubs, error: clubsError } = await supabase
@@ -457,7 +470,7 @@ router.get('/search', authenticateToken, async (req: any, res) => {
       return res.status(500).json({ error: 'Failed to search clubs' });
     }
 
-    res.json({ players: players || [], clubs: clubs || [] });
+    res.json({ players: players || [], admins: admins || [], clubs: clubs || [] });
   } catch (error: any) {
     console.error('Search error:', error);
     res.status(500).json({ error: 'Failed to search' });
@@ -465,6 +478,23 @@ router.get('/search', authenticateToken, async (req: any, res) => {
 });
 
 // Get Public Profile (Respects Visibility Settings)
+router.get('/public/admin-logs/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const { data: logs, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .eq('admin_id', req.params.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+    res.json({ logs });
+  } catch (error) {
+    console.error('Fetch admin logs error:', error);
+    res.status(500).json({ error: 'Failed to fetch admin logs' });
+  }
+});
+
 router.get('/public/profile/:id', authenticateToken, async (req: any, res) => {
   try {
     const { data: user, error } = await supabase
