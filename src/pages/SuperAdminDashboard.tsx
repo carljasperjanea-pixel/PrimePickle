@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil, KeyRound, Ban, ShieldCheck, Activity, LineChart, TrendingUp, ActivitySquare, Server, Clock, DollarSign, Target, Trophy } from 'lucide-react';
+import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil, Key, Ban, ShieldCheck, Activity, LineChart, TrendingUp, Server, Clock, DollarSign, Target, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { SendNotificationDialog } from '@/components/SendNotificationDialog';
@@ -18,6 +18,7 @@ export default function SuperAdminDashboard() {
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'kpi' | 'users' | 'logs' | 'settings'>('overview');
   const [kpiData, setKpiData] = useState<any>(null);
+  const [kpiError, setKpiError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -76,10 +77,12 @@ export default function SuperAdminDashboard() {
 
   const fetchKpiData = async () => {
     try {
+      setKpiError(null);
       const data = await apiRequest('/super-admin/kpi');
       setKpiData(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to fetch KPI data:', e);
+      setKpiError(e.message || 'Failed to fetch KPI data');
     }
   };
 
@@ -232,12 +235,22 @@ export default function SuperAdminDashboard() {
               </div>
             )}
 
-            {activeTab === 'kpi' && kpiData && (
+            {activeTab === 'kpi' && (
               <div className="space-y-8">
-                {/* Top 3 Big Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {kpiError && (
+                  <div className="p-4 bg-red-50 text-red-600 rounded-md border border-red-200">
+                    {kpiError}
+                  </div>
+                )}
+                {!kpiData && !kpiError && (
+                  <div className="p-8 text-center text-slate-500">Loading KPI data...</div>
+                )}
+                {kpiData && (
+                  <>
+                    {/* Top 3 Big Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <StatsCard 
-                    icon={<ActivitySquare className="w-6 h-6 text-indigo-600" />} 
+                    icon={<Activity className="w-6 h-6 text-indigo-600" />} 
                     bg="bg-indigo-100" 
                     value={kpiData.activeMatches} 
                     label="Active Matches (Real-time)" 
@@ -320,6 +333,8 @@ export default function SuperAdminDashboard() {
                     </CardContent>
                   </Card>
                 </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -486,7 +501,7 @@ export default function SuperAdminDashboard() {
                               title="Force Password Reset"
                               onClick={() => handleAction(u.id, 'reset-password')}
                             >
-                              <KeyRound className="w-4 h-4" />
+                              <Key className="w-4 h-4" />
                             </Button>
                             <Button 
                               variant="outline" 

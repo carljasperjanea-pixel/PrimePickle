@@ -174,9 +174,9 @@ router.get('/super-admin/kpi', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'super_admin') return res.sendStatus(403);
 
   try {
-    // 1. Active Matches
+    // 1. Active Matches (from lobbies table)
     const { count: activeMatches, error: matchesError } = await supabase
-      .from('matches')
+      .from('lobbies')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'in_progress');
       
