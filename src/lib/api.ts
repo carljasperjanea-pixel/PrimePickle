@@ -14,6 +14,13 @@ export async function apiRequest(endpoint: string, method: string = 'GET', body?
 
   const response = await fetch(`/api${endpoint}`, options);
   
+  if (response.status === 503) {
+    if (window.location.pathname !== '/maintenance') {
+      window.location.href = '/maintenance';
+    }
+    throw new Error('Maintenance Mode');
+  }
+
   if (response.status === 401 && !endpoint.startsWith('/auth/')) {
     // Handle unauthorized (redirect to login if needed)
     // Only redirect if NOT an auth endpoint (like login itself)

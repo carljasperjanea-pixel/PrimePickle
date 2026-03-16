@@ -7,6 +7,7 @@ import { supabase, supabaseKeyConfig } from './supabase.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
+let isMaintenanceMode = false;
 
 // Configure Multer for file uploads (memory storage)
 const storage = multer.memoryStorage();
@@ -19,12 +20,34 @@ const authenticateToken = (req: any, res: any, next: any) => {
 
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
     if (err) return res.sendStatus(403);
+    
+    if (isMaintenanceMode && user.role !== 'admin' && user.role !== 'super_admin') {
+      return res.status(503).json({ error: 'Maintenance Mode is active. Please try again later.' });
+    }
+    
     req.user = user;
     next();
   });
 };
 
 // --- Super Admin Routes ---
+
+// Get maintenance mode status
+router.get('/system/maintenance', (req, res) => {
+  res.json({ isMaintenanceMode });
+});
+
+// Toggle maintenance mode
+router.post('/super-admin/maintenance', authenticateToken, (req: any, res) => {
+  if (req.user.role !== 'super_admin') return res.sendStatus(403);
+  
+  const { enabled } = req.body;
+  if (typeof enabled === 'boolean') {
+    isMaintenanceMode = enabled;
+  }
+  
+  res.json({ isMaintenanceMode });
+});
 
 // Get all users
 router.get('/super-admin/users', authenticateToken, async (req: any, res) => {
@@ -116,6 +139,10 @@ router.post('/auth/signup', async (req, res) => {
   }
 
   try {
+    if (isMaintenanceMode) {
+      return res.status(503).json({ error: 'Maintenance Mode is active. Please try again later.' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const id = uuidv4();
     
@@ -227,6 +254,10 @@ router.post('/auth/login', async (req, res) => {
 
     if (error || !user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    if (isMaintenanceMode && user.role !== 'admin' && user.role !== 'super_admin') {
+      return res.status(503).json({ error: 'Maintenance Mode is active. Please try again later.' });
     }
     
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);

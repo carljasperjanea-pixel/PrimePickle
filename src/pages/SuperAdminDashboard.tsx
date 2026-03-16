@@ -9,10 +9,12 @@ import { SendNotificationDialog } from '@/components/SendNotificationDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 export default function SuperAdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,9 +24,32 @@ export default function SuperAdminDashboard() {
       else {
         setUser(u);
         fetchUsers();
+        fetchMaintenanceMode();
       }
     });
   }, []);
+
+  const fetchMaintenanceMode = async () => {
+    try {
+      const data = await apiRequest('/system/maintenance');
+      setIsMaintenanceMode(data.isMaintenanceMode);
+    } catch (e) {
+      console.error('Failed to fetch maintenance mode:', e);
+    }
+  };
+
+  const toggleMaintenanceMode = async (enabled: boolean) => {
+    if (enabled) {
+      if (!confirm('Are you sure you want to enable Maintenance Mode? All non-admin users will be redirected to a maintenance page.')) return;
+    }
+    
+    try {
+      const data = await apiRequest('/super-admin/maintenance', 'POST', { enabled });
+      setIsMaintenanceMode(data.isMaintenanceMode);
+    } catch (e: any) {
+      alert(`Failed to toggle maintenance mode: ${e.message}`);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -143,6 +168,41 @@ export default function SuperAdminDashboard() {
             label="Players" 
           />
         </div>
+
+        {/* System Controls */}
+        <Card className="border shadow-sm border-amber-200">
+          <div className="p-5 border-b bg-amber-50 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <ShieldAlert className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-amber-900">System Controls</h3>
+                <p className="text-sm text-amber-700">Global platform settings and kill-switches.</p>
+              </div>
+            </div>
+          </div>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-white">
+              <div>
+                <h4 className="font-semibold text-gray-900">Maintenance Mode</h4>
+                <p className="text-sm text-gray-500 mt-1">
+                  When enabled, all regular players will be redirected to a maintenance page. 
+                  Admins and Super Admins will retain full access.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-sm font-medium ${isMaintenanceMode ? 'text-amber-600' : 'text-gray-500'}`}>
+                  {isMaintenanceMode ? 'Active' : 'Disabled'}
+                </span>
+                <Switch 
+                  checked={isMaintenanceMode}
+                  onCheckedChange={toggleMaintenanceMode}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Users List */}
         <Card className="border shadow-sm">
