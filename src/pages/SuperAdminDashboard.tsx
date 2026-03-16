@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil, KeyRound, Ban, ShieldCheck, Activity } from 'lucide-react';
+import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil, KeyRound, Ban, ShieldCheck, Activity, LineChart, TrendingUp, ActivitySquare, Server, Clock, DollarSign, Target, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { SendNotificationDialog } from '@/components/SendNotificationDialog';
@@ -16,7 +16,8 @@ export default function SuperAdminDashboard() {
   const [users, setUsers] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'kpi' | 'users' | 'logs' | 'settings'>('overview');
+  const [kpiData, setKpiData] = useState<any>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function SuperAdminDashboard() {
         fetchUsers();
         fetchMaintenanceMode();
         fetchLogs();
+        fetchKpiData();
       }
     });
   }, []);
@@ -69,6 +71,15 @@ export default function SuperAdminDashboard() {
       setLogs(data.logs || []);
     } catch (e) {
       console.error('Failed to fetch logs:', e);
+    }
+  };
+
+  const fetchKpiData = async () => {
+    try {
+      const data = await apiRequest('/super-admin/kpi');
+      setKpiData(data);
+    } catch (e) {
+      console.error('Failed to fetch KPI data:', e);
     }
   };
 
@@ -170,6 +181,12 @@ export default function SuperAdminDashboard() {
                 Overview
               </button>
               <button 
+                onClick={() => setActiveTab('kpi')}
+                className={`text-left px-4 py-2 rounded-md font-medium transition-colors flex items-center gap-2 ${activeTab === 'kpi' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                <LineChart className="w-4 h-4" /> KPI Overview
+              </button>
+              <button 
                 onClick={() => setActiveTab('users')}
                 className={`text-left px-4 py-2 rounded-md font-medium transition-colors ${activeTab === 'users' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
               >
@@ -194,24 +211,115 @@ export default function SuperAdminDashboard() {
           <div className="flex-1 space-y-8">
             {activeTab === 'overview' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <StatsCard 
-            icon={<Users className="w-6 h-6 text-blue-600" />} 
-            bg="bg-blue-100" 
-            value={users.length} 
-            label="Total Users" 
-          />
-          <StatsCard 
-            icon={<Shield className="w-6 h-6 text-emerald-600" />} 
-            bg="bg-emerald-100" 
-            value={adminsCount} 
-            label="Admins" 
-          />
-          <StatsCard 
-            icon={<UserIcon className="w-6 h-6 text-purple-600" />} 
-            bg="bg-purple-100" 
-            value={playersCount} 
-            label="Players" 
-          />
+                <StatsCard 
+                  icon={<Users className="w-6 h-6 text-blue-600" />} 
+                  bg="bg-blue-100" 
+                  value={users.length} 
+                  label="Total Users" 
+                />
+                <StatsCard 
+                  icon={<Shield className="w-6 h-6 text-emerald-600" />} 
+                  bg="bg-emerald-100" 
+                  value={adminsCount} 
+                  label="Admins" 
+                />
+                <StatsCard 
+                  icon={<UserIcon className="w-6 h-6 text-purple-600" />} 
+                  bg="bg-purple-100" 
+                  value={playersCount} 
+                  label="Players" 
+                />
+              </div>
+            )}
+
+            {activeTab === 'kpi' && kpiData && (
+              <div className="space-y-8">
+                {/* Top 3 Big Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <StatsCard 
+                    icon={<ActivitySquare className="w-6 h-6 text-indigo-600" />} 
+                    bg="bg-indigo-100" 
+                    value={kpiData.activeMatches} 
+                    label="Active Matches (Real-time)" 
+                  />
+                  <StatsCard 
+                    icon={<TrendingUp className="w-6 h-6 text-emerald-600" />} 
+                    bg="bg-emerald-100" 
+                    value={kpiData.newUsersToday} 
+                    label="New Users Today" 
+                  />
+                  <StatsCard 
+                    icon={<Server className={`w-6 h-6 ${kpiData.systemStatus === 'Operational' ? 'text-emerald-600' : 'text-rose-600'}`} />} 
+                    bg={kpiData.systemStatus === 'Operational' ? 'bg-emerald-100' : 'bg-rose-100'} 
+                    value={kpiData.systemStatus} 
+                    label="System Status" 
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* 1. Engagement & Growth */}
+                  <Card className="border shadow-sm">
+                    <div className="p-4 border-b bg-slate-50">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-blue-600" />
+                        Engagement & Growth
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">The "Health" of your App</p>
+                    </div>
+                    <CardContent className="p-0 divide-y">
+                      <KpiRow label="DAU/MAU Ratio (Stickiness)" value={kpiData.dauMauRatio} description="Users who log in daily" />
+                      <KpiRow label="Match Completion Rate" value={kpiData.matchCompletionRate} description="Started matches resulting in a final score" />
+                      <KpiRow label="Retention Rate (D30)" value={kpiData.retentionRateD30} description="Users still active 30 days after signup" />
+                    </CardContent>
+                  </Card>
+
+                  {/* 2. Tournament & Match Metrics */}
+                  <Card className="border shadow-sm">
+                    <div className="p-4 border-b bg-slate-50">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-600" />
+                        Tournament & Match Metrics
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">The "Value" of your App</p>
+                    </div>
+                    <CardContent className="p-0 divide-y">
+                      <KpiRow label="Court Utilization Rate" value={kpiData.courtUtilizationRate} description="Hours courts are booked vs. empty" />
+                      <KpiRow label="Avg Matches per Tournament" value={kpiData.avgMatchesPerTournament} description="Local brackets vs regional events" />
+                      <KpiRow label="Seeding Accuracy" value={kpiData.seedingAccuracy} description="How often the higher seed wins" />
+                    </CardContent>
+                  </Card>
+
+                  {/* 3. Player Analytics */}
+                  <Card className="border shadow-sm">
+                    <div className="p-4 border-b bg-slate-50">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Target className="w-4 h-4 text-purple-600" />
+                        Player Analytics
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">The "Competitive" Edge</p>
+                    </div>
+                    <CardContent className="p-0 divide-y">
+                      <KpiRow label="Point Momentum" value={kpiData.pointMomentum} description="Visual KPI showing scoring runs" />
+                      <KpiRow label="Win/Loss by Side" value={kpiData.winLossBySide} description="Identifies unfair court conditions" />
+                    </CardContent>
+                  </Card>
+
+                  {/* 4. Financial & Administrative */}
+                  <Card className="border shadow-sm">
+                    <div className="p-4 border-b bg-slate-50">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-emerald-600" />
+                        Financial & Administrative
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">The "Business" Side</p>
+                    </div>
+                    <CardContent className="p-0 divide-y">
+                      <KpiRow label="ARPU" value={kpiData.arpu} description="Average Revenue Per User" />
+                      <KpiRow label="Admin Activity Volume" value={kpiData.adminActivityVolume} description="Actions taken by admins (7 days)" />
+                      <KpiRow label="Support Ticket Response" value={kpiData.supportTicketResponseTime} description="Time to resolve disputes/bugs" />
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             )}
 
@@ -492,5 +600,19 @@ function AdminProfileEditor({ user, onUpdate }: { user: any, onUpdate: (u: any) 
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function KpiRow({ label, value, description }: { label: string, value: string | number, description: string }) {
+  return (
+    <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50 transition-colors">
+      <div>
+        <div className="font-medium text-slate-900">{label}</div>
+        <div className="text-xs text-slate-500">{description}</div>
+      </div>
+      <div className="font-bold text-lg text-slate-700 sm:text-right">
+        {value}
+      </div>
+    </div>
   );
 }

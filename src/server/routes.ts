@@ -169,6 +169,72 @@ router.get('/super-admin/activity-logs', authenticateToken, async (req: any, res
   }
 });
 
+// Get KPI data
+router.get('/super-admin/kpi', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    // 1. Active Matches
+    const { count: activeMatches, error: matchesError } = await supabase
+      .from('matches')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'in_progress');
+      
+    if (matchesError) throw matchesError;
+
+    // 2. New Users Today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const { count: newUsersToday, error: usersError } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', today.toISOString());
+      
+    if (usersError) throw usersError;
+
+    // 3. Admin Activity Volume (Last 7 days)
+    const lastWeek = new Date();
+    lastWeek.setDate(lastWeek.getDate() - 7);
+    const { count: adminActivityVolume, error: logsError } = await supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', lastWeek.toISOString());
+      
+    if (logsError) throw logsError;
+
+    // Mock data for other KPIs
+    const kpiData = {
+      activeMatches: activeMatches || 0,
+      newUsersToday: newUsersToday || 0,
+      systemStatus: 'Operational',
+      
+      // Engagement & Growth
+      dauMauRatio: '24%',
+      matchCompletionRate: '92%',
+      retentionRateD30: '45%',
+      
+      // Tournament & Match Metrics
+      courtUtilizationRate: '68%',
+      avgMatchesPerTournament: '14',
+      seedingAccuracy: '82%',
+      
+      // Player Analytics
+      pointMomentum: 'Avg 3.2 point runs',
+      winLossBySide: 'North 52% / South 48%',
+      
+      // Financial & Administrative
+      arpu: '$4.50',
+      adminActivityVolume: adminActivityVolume || 0,
+      supportTicketResponseTime: '2.4 hours'
+    };
+
+    res.json(kpiData);
+  } catch (error) {
+    console.error('Fetch KPI error:', error);
+    res.status(500).json({ error: 'Failed to fetch KPI data' });
+  }
+});
+
 // --- Auth Routes ---
 
 router.post('/auth/signup', async (req, res) => {
