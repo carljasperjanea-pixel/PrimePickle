@@ -30,6 +30,26 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
+// Helper to log admin activity
+const logAdminActivity = async (adminId: string, action: string, targetId?: string, details?: any, ipAddress?: string) => {
+  try {
+    const { error } = await supabase
+      .from('audit_logs')
+      .insert({
+        admin_id: adminId,
+        action_performed: action,
+        target_id: targetId || null,
+        ip_address: ipAddress || null,
+        details: details || {}
+      });
+    if (error) {
+      console.error('Failed to log admin activity:', error);
+    }
+  } catch (e) {
+    console.error('Exception logging admin activity:', e);
+  }
+};
+
 // --- Super Admin Routes ---
 
 // Get maintenance mode status
@@ -38,12 +58,13 @@ router.get('/system/maintenance', (req, res) => {
 });
 
 // Toggle maintenance mode
-router.post('/super-admin/maintenance', authenticateToken, (req: any, res) => {
+router.post('/super-admin/maintenance', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'super_admin') return res.sendStatus(403);
   
   const { enabled } = req.body;
   if (typeof enabled === 'boolean') {
     isMaintenanceMode = enabled;
+    await logAdminActivity(req.user.id, `Toggled Maintenance Mode: ${enabled ? 'ON' : 'OFF'}`, undefined, { enabled }, req.ip);
   }
   
   res.json({ isMaintenanceMode });
@@ -99,6 +120,7 @@ router.put('/super-admin/users/:id/role', authenticateToken, async (req: any, re
       .single();
 
     if (error) throw error;
+    await logAdminActivity(req.user.id, `Updated User Role: ${role}`, req.params.id, { new_role: role }, req.ip);
     res.json({ user, message: 'Role updated successfully' });
   } catch (error) {
     console.error('Update role error:', error);
@@ -117,10 +139,33 @@ router.delete('/super-admin/users/:id', authenticateToken, async (req: any, res)
       .eq('id', req.params.id);
 
     if (error) throw error;
+    await logAdminActivity(req.user.id, 'Deleted User', req.params.id, {}, req.ip);
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Get activity logs
+router.get('/super-admin/activity-logs', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'super_admin') return res.sendStatus(403);
+
+  try {
+    const { data: logs, error } = await supabase
+      .from('audit_logs')
+      .select(`
+        *,
+        admin:profiles!admin_id(email, display_name, role)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+    res.json({ logs });
+  } catch (error) {
+    console.error('Fetch activity logs error:', error);
+    res.status(500).json({ error: 'Failed to fetch activity logs' });
   }
 });
 
@@ -831,6 +876,8 @@ router.post('/admin/users/:id/toggle-mfa', authenticateToken, async (req: any, r
       throw updateError;
     }
 
+    await logAdminActivity(req.user.id, `Toggled MFA: ${!user.mfa_enabled ? 'ON' : 'OFF'}`, id, { mfa_enabled: !user.mfa_enabled }, req.ip);
+
     res.json({ success: true, mfa_enabled: !user.mfa_enabled });
   } catch (error) {
     console.error('Toggle MFA error:', error);
@@ -869,6 +916,8 @@ router.post('/admin/users/:id/toggle-suspend', authenticateToken, async (req: an
       throw updateError;
     }
 
+    await logAdminActivity(req.user.id, `Toggled Suspend: ${!user.is_suspended ? 'ON' : 'OFF'}`, id, { is_suspended: !user.is_suspended }, req.ip);
+
     res.json({ success: true, is_suspended: !user.is_suspended });
   } catch (error) {
     console.error('Toggle suspend error:', error);
@@ -886,6 +935,8 @@ router.post('/admin/users/:id/reset-password', authenticateToken, async (req: an
     // In a real app, this would send a password reset email via Supabase Auth
     // For this demo, we'll just return success
     // await supabase.auth.admin.generateLink({ type: 'recovery', email: user.email })
+    
+    await logAdminActivity(req.user.id, 'Initiated Password Reset', id, {}, req.ip);
     
     res.json({ success: true, message: 'Password reset email sent' });
   } catch (error) {
@@ -937,6 +988,8 @@ router.post('/admin/notify', authenticateToken, async (req: any, res) => {
       .insert(notifications);
 
     if (insertError) throw insertError;
+
+    await logAdminActivity(req.user.id, `Sent Notification to ${targetRole}`, undefined, { targetRole, message }, req.ip);
 
     res.json({ success: true, count: notifications.length });
   } catch (error) {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
-import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil, KeyRound, Ban, ShieldCheck } from 'lucide-react';
+import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil, KeyRound, Ban, ShieldCheck, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
 import { SendNotificationDialog } from '@/components/SendNotificationDialog';
@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 export default function SuperAdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const navigate = useNavigate();
 
@@ -25,6 +26,7 @@ export default function SuperAdminDashboard() {
         setUser(u);
         fetchUsers();
         fetchMaintenanceMode();
+        fetchLogs();
       }
     });
   }, []);
@@ -57,6 +59,15 @@ export default function SuperAdminDashboard() {
       setUsers(data.users);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const data = await apiRequest('/super-admin/activity-logs');
+      setLogs(data.logs || []);
+    } catch (e) {
+      console.error('Failed to fetch logs:', e);
     }
   };
 
@@ -202,6 +213,72 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
           </CardContent>
+        </Card>
+
+        {/* Activity Logs */}
+        <Card className="border shadow-sm">
+          <div className="p-5 border-b bg-white flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-slate-100 rounded-lg">
+                <Activity className="w-5 h-5 text-slate-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-900">Admin Activity Log</h3>
+                <p className="text-sm text-gray-500">Track actions performed by Admins and Super Admins.</p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchLogs}>Refresh Logs</Button>
+          </div>
+          <div className="p-0 max-h-[400px] overflow-y-auto">
+            <table className="w-full text-sm text-left text-gray-500">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b sticky top-0">
+                <tr>
+                  <th className="px-6 py-3">Timestamp</th>
+                  <th className="px-6 py-3">Admin</th>
+                  <th className="px-6 py-3">Action</th>
+                  <th className="px-6 py-3">Target ID</th>
+                  <th className="px-6 py-3">IP Address</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                      No activity logs found.
+                    </td>
+                  </tr>
+                ) : (
+                  logs.map((log) => (
+                    <tr key={log.id} className="bg-white border-b hover:bg-gray-50">
+                      <td className="px-6 py-3 whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-3 font-medium text-gray-900">
+                        {log.admin?.display_name || log.admin?.email || 'Unknown'}
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+                          {log.admin?.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className="font-medium text-slate-700">{log.action_performed}</span>
+                        {log.details && Object.keys(log.details).length > 0 && (
+                          <div className="text-xs text-slate-400 mt-1 font-mono truncate max-w-[200px]">
+                            {JSON.stringify(log.details)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-3 font-mono text-xs text-slate-400">
+                        {log.target_id || '-'}
+                      </td>
+                      <td className="px-6 py-3 font-mono text-xs text-slate-400">
+                        {log.ip_address || '-'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         {/* Users List */}
