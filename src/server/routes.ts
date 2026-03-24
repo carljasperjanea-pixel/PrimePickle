@@ -324,6 +324,92 @@ router.post('/auth/signup', async (req, res) => {
   }
 });
 
+router.post('/auth/google', async (req, res) => {
+  const { access_token } = req.body;
+
+  if (!access_token) {
+    return res.status(400).json({ error: 'Access token is required' });
+  }
+
+  try {
+    // Verify the Supabase token
+    const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser(access_token);
+
+    if (authError || !supabaseUser) {
+      console.error('Supabase auth error:', authError);
+      return res.status(401).json({ error: 'Invalid access token' });
+    }
+
+    const email = supabaseUser.email;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required from OAuth provider' });
+    }
+
+    // Check if user exists in profiles
+    let { data: user, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (profileError && profileError.code !== 'PGRST116') {
+      console.error('Profile lookup error:', profileError);
+      return res.status(500).json({ error: 'Database error during profile lookup' });
+    }
+
+    // If user doesn't exist, create a new profile
+    if (!user) {
+      const id = supabaseUser.id; // Use Supabase Auth ID
+      const display_name = supabaseUser.user_metadata?.full_name || email.split('@')[0];
+      const full_name = supabaseUser.user_metadata?.full_name || '';
+      const avatar_url = supabaseUser.user_metadata?.avatar_url || null;
+      const dummyPasswordHash = await bcrypt.hash(Math.random().toString(36), 10);
+
+      const { error: insertError } = await supabase.from('profiles').insert({
+        id,
+        email,
+        display_name,
+        full_name,
+        avatar_url,
+        password_hash: dummyPasswordHash,
+        role: 'player',
+      });
+
+      if (insertError) {
+        console.error('Profile creation error:', insertError);
+        return res.status(500).json({ error: 'Failed to create user profile' });
+      }
+
+      // Fetch the newly created user
+      const { data: newUser, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError || !newUser) {
+        return res.status(500).json({ error: 'Failed to retrieve new user profile' });
+      }
+      user = newUser;
+    }
+
+    // Generate custom JWT token
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
+    res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    
+    // Remove password hash from response
+    const { password_hash, ...userWithoutPassword } = user;
+    res.json({ user: userWithoutPassword });
+
+  } catch (error: any) {
+    console.error('Google Auth Exception:', error);
+    res.status(500).json({ 
+      error: error.message || 'Internal server error', 
+      details: error.toString() 
+    });
+  }
+});
+
 router.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
   
