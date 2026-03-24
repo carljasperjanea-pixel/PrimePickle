@@ -324,6 +324,29 @@ router.post('/auth/signup', async (req, res) => {
   }
 });
 
+router.get('/auth/callback', (req, res) => {
+  res.send(`
+    <html>
+      <body>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({ 
+              type: 'OAUTH_AUTH_SUCCESS', 
+              url: window.location.href,
+              search: window.location.search,
+              hash: window.location.hash
+            }, '*');
+            window.close();
+          } else {
+            window.location.href = '/';
+          }
+        </script>
+        <p>Authentication successful. This window should close automatically.</p>
+      </body>
+    </html>
+  `);
+});
+
 router.post('/auth/google', async (req, res) => {
   const { access_token } = req.body;
 

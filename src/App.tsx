@@ -9,7 +9,6 @@ import { apiRequest } from './lib/api';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import AuthCallback from './pages/AuthCallback';
 import PlayerDashboard from './pages/PlayerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
@@ -58,7 +57,6 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/dashboard" element={<PlayerDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/super-admin" element={<SuperAdminDashboard />} />

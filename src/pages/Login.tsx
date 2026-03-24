@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,15 +12,73 @@ export default function Login() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        try {
+          const searchParams = new URLSearchParams(event.data.search);
+          const code = searchParams.get('code');
+          
+          let session;
+          
+          if (code) {
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) throw error;
+            session = data.session;
+          } else if (event.data.hash) {
+            const hashParams = new URLSearchParams(event.data.hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            const refreshToken = hashParams.get('refresh_token');
+            if (accessToken && refreshToken) {
+              const { data, error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken
+              });
+              if (error) throw error;
+              session = data.session;
+            }
+          }
+
+          if (session) {
+            const response = await apiRequest('/auth/google', 'POST', {
+              access_token: session.access_token
+            });
+
+            if (response.user.role === 'super_admin') {
+              navigate('/super-admin');
+            } else if (response.user.role === 'admin') {
+              navigate('/admin');
+            } else {
+              navigate('/dashboard');
+            }
+          }
+        } catch (err: any) {
+          console.error('OAuth callback error:', err);
+          setError(err.message || 'Failed to authenticate');
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [navigate]);
+
   const handleGoogleLogin = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: `${window.location.origin}/api/auth/callback`,
+          skipBrowserRedirect: true,
         }
       });
       if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, 'oauth_popup', 'width=600,height=700');
+      }
     } catch (err: any) {
       setError(err.message);
     }
