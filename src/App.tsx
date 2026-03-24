@@ -18,6 +18,8 @@ import ClubDashboard from './pages/ClubDashboard';
 import Messages from './pages/Messages';
 import Maintenance from './pages/Maintenance';
 
+import AuthCallback from './pages/AuthCallback';
+
 function GlobalMaintenanceCheck({ children }: { children: React.ReactNode }) {
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/dashboard" element={<PlayerDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/super-admin" element={<SuperAdminDashboard />} />

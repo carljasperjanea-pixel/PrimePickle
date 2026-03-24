@@ -324,31 +324,8 @@ router.post('/auth/signup', async (req, res) => {
   }
 });
 
-router.get('/auth/callback', (req, res) => {
-  res.send(`
-    <html>
-      <body>
-        <script>
-          if (window.opener) {
-            window.opener.postMessage({ 
-              type: 'OAUTH_AUTH_SUCCESS', 
-              url: window.location.href,
-              search: window.location.search,
-              hash: window.location.hash
-            }, '*');
-            window.close();
-          } else {
-            window.location.href = '/';
-          }
-        </script>
-        <p>Authentication successful. This window should close automatically.</p>
-      </body>
-    </html>
-  `);
-});
-
 router.post('/auth/google', async (req, res) => {
-  const { access_token } = req.body;
+  const { access_token, full_name: reqFullName, display_name: reqDisplayName, address, phone, role: reqRole } = req.body;
 
   if (!access_token) {
     return res.status(400).json({ error: 'Access token is required' });
@@ -383,10 +360,11 @@ router.post('/auth/google', async (req, res) => {
     // If user doesn't exist, create a new profile
     if (!user) {
       const id = supabaseUser.id; // Use Supabase Auth ID
-      const display_name = supabaseUser.user_metadata?.full_name || email.split('@')[0];
-      const full_name = supabaseUser.user_metadata?.full_name || '';
+      const display_name = reqDisplayName || supabaseUser.user_metadata?.full_name || email.split('@')[0];
+      const full_name = reqFullName || supabaseUser.user_metadata?.full_name || '';
       const avatar_url = supabaseUser.user_metadata?.avatar_url || null;
       const dummyPasswordHash = await bcrypt.hash(Math.random().toString(36), 10);
+      const role = reqRole || 'player';
 
       const { error: insertError } = await supabase.from('profiles').insert({
         id,
@@ -395,7 +373,9 @@ router.post('/auth/google', async (req, res) => {
         full_name,
         avatar_url,
         password_hash: dummyPasswordHash,
-        role: 'player',
+        role,
+        address: address || null,
+        phone: phone || null,
       });
 
       if (insertError) {
