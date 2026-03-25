@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
+import { supabase } from '@/lib/supabase-client';
 import { Users, Plus, CheckCircle, Trophy, Activity, DollarSign, LogOut, QrCode, Clock, X, Search, MessageSquare, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UserDirectory } from '@/components/UserDirectory';
@@ -73,7 +74,12 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error('Supabase signout error:', e);
+    }
     document.cookie = 'token=; Max-Age=0; path=/;';
     navigate('/login');
   };

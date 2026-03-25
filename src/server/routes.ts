@@ -3,11 +3,23 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
+import { OAuth2Client } from 'google-auth-library';
 import { supabase, supabaseKeyConfig } from './supabase.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
 let isMaintenanceMode = false;
+
+let googleClient: OAuth2Client | null = null;
+function getGoogleClient() {
+  if (!googleClient) {
+    const clientId = process.env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId) {
+      googleClient = new OAuth2Client(clientId);
+    }
+  }
+  return googleClient;
+}
 
 // Configure Multer for file uploads (memory storage)
 const storage = multer.memoryStorage();
@@ -383,6 +395,75 @@ router.post('/auth/login', async (req, res) => {
       error: error.message || 'Internal server error', 
       details: error.toString() 
     });
+  }
+});
+
+router.post('/auth/google', async (req, res) => {
+  const { token } = req.body;
+  try {
+    const client = getGoogleClient();
+    if (!client) {
+      return res.status(500).json({ error: 'Google OAuth is not configured on the server.' });
+    }
+
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.VITE_GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload) throw new Error('Invalid Google token');
+
+    const { email, name, picture } = payload;
+
+    // Check if user exists
+    let { data: user, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    if (!user) {
+      // Create new user
+      const id = uuidv4();
+      const randomPassword = uuidv4();
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      const { data: newUser, error: insertError } = await supabase
+        .from('profiles')
+        .insert([
+          { 
+            id, 
+            email, 
+            password_hash: hashedPassword, 
+            display_name: name || email?.split('@')[0] || 'User', 
+            full_name: name || '',
+            role: 'player',
+            avatar_url: picture || null
+          }
+        ])
+        .select()
+        .single();
+      
+      if (insertError) throw insertError;
+      user = newUser;
+    }
+
+    if (isMaintenanceMode && user.role !== 'admin' && user.role !== 'super_admin') {
+      return res.status(503).json({ error: 'Maintenance Mode is active. Please try again later.' });
+    }
+
+    const jwtToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
+    res.cookie('token', jwtToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    
+    const { password_hash, ...userWithoutPassword } = user;
+    res.json({ user: userWithoutPassword });
+  } catch (error: any) {
+    console.error('Google Auth Exception:', error);
+    res.status(500).json({ error: 'Google authentication failed', details: error.message });
   }
 });
 
