@@ -1,8 +1,20 @@
-import { supabase } from './supabase.js';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 
+dotenv.config();
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
 export async function seedSuperAdmin() {
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('SUPABASE_URL or SUPABASE_KEY is missing. Skipping super admin seeding.');
+    return;
+  }
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
   console.log('Seeding super admin account...');
   
   const email = 'superadmin@primepickle.com';

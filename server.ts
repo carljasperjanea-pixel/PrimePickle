@@ -1,12 +1,14 @@
-import 'dotenv/config';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
 import apiRoutes from './src/server/routes.js';
+import dotenv from 'dotenv';
 import { setupWebSocket } from './src/server/websocket.js';
 import { seedSuperAdmin } from './src/server/seed-super-admin.js';
+
+dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

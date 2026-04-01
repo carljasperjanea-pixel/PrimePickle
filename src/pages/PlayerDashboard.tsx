@@ -14,7 +14,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { apiRequest, useUser } from '@/lib/api';
-import { supabase } from '@/lib/supabase-client';
 import { Trophy, User, Activity, QrCode, LogOut, Edit2, TrendingUp, Target, BarChart, Camera, Calendar, X, Upload, Eye, EyeOff, Shield, Plus, Trash2, Star, Image as ImageIcon, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scanner } from '@yudiel/react-qr-scanner';
@@ -291,14 +290,6 @@ export default function PlayerDashboard() {
         console.error('Failed to leave lobby on logout', error);
       }
     }
-    
-    // Sign out from Supabase
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.error('Supabase signout error:', e);
-    }
-
     document.cookie = 'token=; Max-Age=0; path=/;';
     navigate('/login');
   };
