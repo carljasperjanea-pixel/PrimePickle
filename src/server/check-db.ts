@@ -1,4 +1,4 @@
-import { supabase, supabaseUrlConfig, supabaseKeyConfig } from './supabase.js';
+import { supabase, supabaseUrlConfig, supabaseKeyConfig } from './supabase.ts';
 
 async function checkDb() {
   console.log('Checking database connection...');

@@ -4,10 +4,30 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { supabase, supabaseKeyConfig } from './supabase.js';
+import { OAuth2Client } from 'google-auth-library';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
+const googleClient = new OAuth2Client(process.env.VITE_GOOGLE_CLIENT_ID || 'dummy-client-id');
 let isMaintenanceMode = false;
+
+// Initialize maintenance mode from DB
+const syncMaintenanceMode = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('feature_flags')
+      .select('is_enabled')
+      .eq('key', 'maintenance_mode')
+      .single();
+    if (data) {
+      isMaintenanceMode = data.is_enabled;
+      console.log(`[SYSTEM] Maintenance Mode initialized: ${isMaintenanceMode}`);
+    }
+  } catch (e) {
+    console.error('Failed to sync maintenance mode:', e);
+  }
+};
+syncMaintenanceMode();
 
 // Configure Multer for file uploads (memory storage)
 const storage = multer.memoryStorage();
@@ -63,8 +83,20 @@ router.post('/super-admin/maintenance', authenticateToken, async (req: any, res)
   
   const { enabled } = req.body;
   if (typeof enabled === 'boolean') {
-    isMaintenanceMode = enabled;
-    await logAdminActivity(req.user.id, `Toggled Maintenance Mode: ${enabled ? 'ON' : 'OFF'}`, undefined, { enabled }, req.ip);
+    try {
+      const { error } = await supabase
+        .from('feature_flags')
+        .update({ is_enabled: enabled, updated_at: new Date().toISOString() })
+        .eq('key', 'maintenance_mode');
+      
+      if (error) throw error;
+      
+      isMaintenanceMode = enabled;
+      await logAdminActivity(req.user.id, `Toggled Maintenance Mode: ${enabled ? 'ON' : 'OFF'}`, undefined, { enabled }, req.ip);
+    } catch (error) {
+      console.error('Failed to toggle maintenance mode in DB:', error);
+      return res.status(500).json({ error: 'Failed to update maintenance mode' });
+    }
   }
   
   res.json({ isMaintenanceMode });
@@ -354,6 +386,10 @@ router.post('/auth/login', async (req, res) => {
           ...error
         });
         
+        if (error.status === 521 || JSON.stringify(error).includes('521') || JSON.stringify(error).includes('fetch failed')) {
+          return res.status(500).json({ error: 'Database Unreachable: Your Supabase project appears to be paused or down. Please log into your Supabase dashboard to restore it.' });
+        }
+        
         if (error.code === '42P01') { // Undefined table
           return res.status(500).json({ error: 'Database table "profiles" not found. Please run the SQL schema.' });
         }
@@ -383,6 +419,87 @@ router.post('/auth/login', async (req, res) => {
       error: error.message || 'Internal server error', 
       details: error.toString() 
     });
+  }
+});
+
+router.post('/auth/google', async (req, res) => {
+  const { token: idToken } = req.body;
+  if (!idToken) {
+    return res.status(400).json({ error: 'Missing token' });
+  }
+  
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.VITE_GOOGLE_CLIENT_ID || 'dummy-client-id',
+    });
+    
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      return res.status(400).json({ error: 'Invalid token payload' });
+    }
+    
+    const { email, name, picture } = payload;
+    
+    // Check if user exists
+    let { data: user, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single();
+      
+    if (error && error.code !== 'PGRST116') {
+      console.error('Google Auth lookup error:', error);
+      let errorMessage = 'Database error';
+      if (error.status === 521 || JSON.stringify(error).includes('521') || JSON.stringify(error).includes('fetch failed')) {
+        errorMessage = 'Database Unreachable: Your Supabase project appears to be paused or down. Please log into your Supabase dashboard to restore it.';
+      }
+      return res.status(500).json({ error: errorMessage });
+    }
+    
+    if (!user) {
+      // Create user
+      const id = uuidv4();
+      const randomPassword = Array(16).fill(0).map(() => Math.random().toString(36).charAt(2)).join('');
+      const password_hash = await bcrypt.hash(randomPassword, 10);
+      
+      const newUser = {
+        id,
+        email,
+        password_hash,
+        full_name: name || email.split('@')[0],
+        display_name: name || email.split('@')[0],
+        avatar_url: picture,
+        role: 'player'
+      };
+      
+      const { data: createdUser, error: createError } = await supabase
+        .from('profiles')
+        .insert([newUser])
+        .select()
+        .single();
+        
+      if (createError) {
+        console.error('Google Auth user creation error:', createError);
+        return res.status(500).json({ error: 'Failed to create user account' });
+      }
+      
+      user = createdUser;
+    }
+    
+    if (isMaintenanceMode && user.role !== 'admin' && user.role !== 'super_admin') {
+      return res.status(503).json({ error: 'Maintenance Mode is active. Please try again later.' });
+    }
+    
+    const authToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
+    res.cookie('token', authToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    
+    const { password_hash, ...userWithoutPassword } = user;
+    res.json({ user: userWithoutPassword });
+    
+  } catch (err: any) {
+    console.error('Google Auth Exception:', err);
+    res.status(401).json({ error: 'Invalid Google token' });
   }
 });
 
@@ -1658,7 +1775,7 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
     // Get players joined in order
     const { data: lobbyPlayers, error: lpError } = await supabase
       .from('lobby_players')
-      .select('profile_id, joined_at')
+      .select('profile_id, joined_at, team')
       .eq('lobby_id', lobby_id)
       .order('joined_at', { ascending: true });
 
@@ -1687,15 +1804,13 @@ router.post('/matches/complete', authenticateToken, async (req: any, res) => {
        return res.status(400).json({ error: 'Match already completed or invalid state' });
     }
 
-    // Map back to ordered list
-    const orderedPlayers = lobbyPlayers?.map((lp: any) => players?.find((p: any) => p.id === lp.profile_id)).filter(Boolean) || [];
-    
-    if (orderedPlayers.length < 2) { 
-       // proceed for testing
-    }
+    // Map back to teams based on stored team value or fallback to join order
+    const lobbyPlayersList = lobbyPlayers || [];
+    const teamAPlayers = lobbyPlayersList.filter((lp: any) => lp.team === 'A' || (!lp.team && lobbyPlayersList.indexOf(lp) < 2));
+    const teamBPlayers = lobbyPlayersList.filter((lp: any) => lp.team === 'B' || (!lp.team && lobbyPlayersList.indexOf(lp) >= 2));
 
-    const teamA = orderedPlayers.slice(0, 2);
-    const teamB = orderedPlayers.slice(2, 4);
+    const teamA = teamAPlayers.map((lp: any) => players?.find((p: any) => p.id === lp.profile_id)).filter(Boolean) || [];
+    const teamB = teamBPlayers.map((lp: any) => players?.find((p: any) => p.id === lp.profile_id)).filter(Boolean) || [];
     
     const mmrDeltaWin = 20;
     const mmrDeltaLoss = 15;

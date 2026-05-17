@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiRequest, useUser } from '@/lib/api';
+import { supabase } from '@/lib/supabase-client';
 import { Users, ShieldAlert, LogOut, Trash2, Shield, User as UserIcon, MessageSquare, Pencil, Key, Ban, ShieldCheck, Activity, LineChart, TrendingUp, Server, Clock, DollarSign, Target, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationsPopover } from '@/components/NotificationsPopover';
@@ -122,7 +123,12 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error('Supabase signout error:', e);
+    }
     document.cookie = 'token=; Max-Age=0; path=/;';
     navigate('/login');
   };

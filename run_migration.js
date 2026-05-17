@@ -1,4 +1,4 @@
-import { supabase } from './src/server/supabase.js';
+import { supabase } from './src/server/supabase.ts';
 
 async function run() {
   const { error } = await supabase.rpc('exec_sql', { sql_string: 'ALTER TABLE public.club_achievements ADD COLUMN IF NOT EXISTS image_url TEXT;' });

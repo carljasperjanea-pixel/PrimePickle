@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { supabase } from './supabase.ts';
 
 export async function generateTournamentMatches(tournamentId: string, format: string, participants: any[]) {
   if (participants.length < 2) {

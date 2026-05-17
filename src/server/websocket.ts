@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
-import { supabase } from './supabase.js';
+import { supabase } from './supabase.ts';
 import { 
   GameState, 
   INITIAL_GAME_STATE, 
@@ -10,7 +10,7 @@ import {
   handleToggleServer as logicHandleToggleServer,
   handleToggleServingTeam as logicHandleToggleServingTeam,
   handleUndo as logicHandleUndo
-} from '../lib/game-logic.js';
+} from '../lib/game-logic.ts';
 
 interface Lobby {
   id: string;

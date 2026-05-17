@@ -5,6 +5,7 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { apiRequest } from './lib/api';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -50,24 +51,28 @@ function GlobalMaintenanceCheck({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'dummy-client-id';
+  
   return (
-    <BrowserRouter>
-      <GlobalMaintenanceCheck>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/dashboard" element={<PlayerDashboard />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/super-admin" element={<SuperAdminDashboard />} />
-          <Route path="/scorer/:lobbyId" element={<Scorer />} />
-          <Route path="/profile/:id" element={<PublicProfile />} />
-          <Route path="/clubs/:id" element={<ClubDashboard />} />
-          <Route path="/messages" element={<Messages />} />
-          <Route path="/maintenance" element={<Maintenance />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </GlobalMaintenanceCheck>
-    </BrowserRouter>
+    <GoogleOAuthProvider clientId={clientId}>
+      <BrowserRouter>
+        <GlobalMaintenanceCheck>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/dashboard" element={<PlayerDashboard />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/super-admin" element={<SuperAdminDashboard />} />
+            <Route path="/scorer/:lobbyId" element={<Scorer />} />
+            <Route path="/profile/:id" element={<PublicProfile />} />
+            <Route path="/clubs/:id" element={<ClubDashboard />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/maintenance" element={<Maintenance />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </GlobalMaintenanceCheck>
+      </BrowserRouter>
+    </GoogleOAuthProvider>
   );
 }

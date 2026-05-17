@@ -1,4 +1,4 @@
-import { supabase } from './src/server/supabase.js';
+import { supabase } from './src/server/supabase.ts';
 
 async function test() {
   const { data, error } = await supabase.from('feature_flags').select('*');

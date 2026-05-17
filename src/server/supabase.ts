@@ -16,8 +16,25 @@ if (!supabaseKey) {
 
 // Validate URL format
 if (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
-  console.warn(`Invalid SUPABASE_URL format: "${supabaseUrl}". Falling back to default.`);
-  supabaseUrl = 'https://ibxuqlhubyrtmtylozyg.supabase.co';
+  // Check if it's accidentally a JWT (common mistake in AI Studio secrets)
+  if (supabaseUrl.startsWith('ey') && supabaseUrl.includes('.')) {
+    try {
+      const payload = JSON.parse(Buffer.from(supabaseUrl.split('.')[1], 'base64').toString());
+      if (payload.ref) {
+        console.warn(`SUPABASE_URL looks like a JWT. Extracting ref: ${payload.ref}`);
+        supabaseUrl = `https://${payload.ref}.supabase.co`;
+      } else {
+        console.warn(`Invalid SUPABASE_URL format: "${supabaseUrl}". Falling back to default.`);
+        supabaseUrl = 'https://ibxuqlhubyrtmtylozyg.supabase.co';
+      }
+    } catch (e) {
+      console.warn(`Invalid SUPABASE_URL format: "${supabaseUrl}". Falling back to default.`);
+      supabaseUrl = 'https://ibxuqlhubyrtmtylozyg.supabase.co';
+    }
+  } else {
+    console.warn(`Invalid SUPABASE_URL format: "${supabaseUrl}". Falling back to default.`);
+    supabaseUrl = 'https://ibxuqlhubyrtmtylozyg.supabase.co';
+  }
 }
 
 if (supabaseKey.startsWith('sb_publishable')) {
